@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dispatch CAD — Amherst NY</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080b0f;
+    --surface: #0d1117;
+    --surface2: #111820;
+    --border: #1e2d3d;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --green: #00ff9d;
+    --yellow: #ffd600;
+    --red: #ff3d5a;
+    --text: #c9d6e3;
+    --muted: #4a6278;
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Barlow Condensed', sans-serif;
+    --body: 'Barlow', sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: var(--body); min-height: 100vh; overflow-x: hidden; }
+  body::before { content: ''; position: fixed; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px); pointer-events: none; z-index: 9999; }
+
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 58px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo-badge { background: var(--accent); color: var(--bg); font-family: var(--sans); font-weight: 900; font-size: 11px; letter-spacing: 2px; padding: 4px 8px; clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 100%, 6px 100%); }
+  .header-title { font-family: var(--sans); font-weight: 700; font-size: 20px; letter-spacing: 3px; color: #fff; text-transform: uppercase; }
+  .header-title span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 24px; }
+  .live-indicator { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--green); letter-spacing: 1px; }
+  .live-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; animation: pulse-green 1.5s ease-in-out infinite; box-shadow: 0 0 8px var(--green); }
+  @keyframes pulse-green { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+  .clock { font-family: var(--mono); font-size: 18px; color: var(--accent); letter-spacing: 2px; }
+
+  .audio-bar { background: var(--surface2); border-bottom: 1px solid var(--border); padding: 10px 28px; display: flex; align-items: center; gap: 20px; }
+  .audio-label { font-family: var(--sans); font-size: 11px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
+  .audio-label span { color: var(--accent2); }
+  audio { flex: 1; height: 32px; }
+
+  .main { display: grid; grid-template-columns: 1fr 340px; height: calc(100vh - 107px); }
+
+  .stats-bar { grid-column: 1 / -1; display: flex; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+  .stat-box { flex: 1; background: var(--surface); padding: 14px 20px; display: flex; flex-direction: column; gap: 4px; }
+  .stat-label { font-family: var(--sans); font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
+  .stat-value { font-family: var(--sans); font-size: 28px; font-weight: 900; color: #fff; line-height: 1; }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+  .stat-value.yellow { color: var(--yellow); }
+
+  .feed-panel { background: var(--bg); overflow-y: auto; border-right: 1px solid var(--border); grid-row: 2; }
+  .feed-panel::-webkit-scrollbar { width: 4px; }
+  .feed-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .panel-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--bg); z-index: 10; }
+  .panel-title { font-family: var(--sans); font-size: 11px; letter-spacing: 4px; color: var(--muted); text-transform: uppercase; }
+  .incident-count { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+
+  .incident-card { border-bottom: 1px solid var(--border); padding: 16px 20px; cursor: pointer; transition: background 0.15s; position: relative; overflow: hidden; }
+  .incident-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
+  .incident-card.high::before { background: var(--red); }
+  .incident-card.medium::before { background: var(--yellow); }
+  .incident-card.low::before { background: var(--green); }
+  .incident-card.unknown::before { background: var(--muted); }
+  .incident-card:hover { background: var(--surface2); }
+  .incident-card.new-flash { animation: newFlash 0.8s ease-out; }
+  @keyframes newFlash { 0% { background: rgba(0,212,255,0.15); } 100% { background: transparent; } }
+
+  .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .incident-type { font-family: var(--sans); font-weight: 700; font-size: 16px; letter-spacing: 1px; color: #fff; text-transform: uppercase; }
+  .priority-badge { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; padding: 3px 8px; border-radius: 2px; text-transform: uppercase; }
+  .priority-badge.high { background: rgba(255,61,90,0.15); color: var(--red); border: 1px solid rgba(255,61,90,0.3); }
+  .priority-badge.medium { background: rgba(255,214,0,0.1); color: var(--yellow); border: 1px solid rgba(255,214,0,0.3); }
+  .priority-badge.low { background: rgba(0,255,157,0.1); color: var(--green); border: 1px solid rgba(0,255,157,0.3); }
+  .priority-badge.unknown { background: rgba(74,98,120,0.2); color: var(--muted); border: 1px solid var(--border); }
+  .incident-location { font-family: var(--mono); font-size: 12px; color: var(--accent); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .incident-location::before { content: '◈'; font-size: 10px; opacity: 0.6; }
+  .incident-units { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .unit-tag { font-family: var(--mono); font-size: 10px; padding: 2px 7px; background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2); color: var(--accent); border-radius: 2px; letter-spacing: 1px; }
+  .incident-transcript { font-size: 12px; color: var(--muted); line-height: 1.5; font-style: italic; border-left: 2px solid var(--border); padding-left: 10px; margin-top: 8px; display: none; }
+  .incident-card.expanded .incident-transcript { display: block; }
+  .card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .incident-time { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .incident-notes { font-size: 12px; color: var(--text); opacity: 0.7; max-width: 70%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .side-panel { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); grid-row: 2; }
+  .transcript-panel { flex: 1; overflow-y: auto; }
+  .transcript-panel::-webkit-scrollbar { width: 4px; }
+  .transcript-panel::-webkit-scrollbar-thumb { background: var(--border); }
+  .transcript-line { padding: 10px 16px; border-bottom: 1px solid var(--border); animation: fadeIn 0.4s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .transcript-time { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+  .transcript-text { font-family: var(--mono); font-size: 12px; color: var(--text); line-height: 1.5; }
+
+  .breakdown-panel { border-top: 1px solid var(--border); padding: 16px; }
+  .breakdown-title { font-family: var(--sans); font-size: 10px; letter-spacing: 4px; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; }
+  .breakdown-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .breakdown-label { font-family: var(--mono); font-size: 11px; color: var(--text); width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .breakdown-bar-bg { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .breakdown-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.6s ease; }
+  .breakdown-count { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 20px; text-align: right; }
+
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; gap: 12px; color: var(--muted); }
+  .empty-icon { font-size: 32px; opacity: 0.3; }
+  .empty-text { font-family: var(--mono); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
+
+  .toast { position: fixed; top: 70px; right: 20px; background: var(--surface2); border: 1px solid var(--accent); border-left: 4px solid var(--accent); padding: 12px 18px; min-width: 280px; z-index: 1000; animation: toastIn 0.3s ease-out; box-shadow: 0 4px 24px rgba(0,212,255,0.15); }
+  .toast.high { border-color: var(--red); box-shadow: 0 4px 24px rgba(255,61,90,0.2); }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+  .toast-type { font-family: var(--sans); font-weight: 700; font-size: 14px; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
+  .toast-loc { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 4px; }
+  .toast.high .toast-loc { color: var(--red); }
+
+  .conn-status { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; }
+  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .conn-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .conn-dot.offline { background: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo-badge">CAD</div>
+    <div class="header-title">Amherst <span>Dispatch</span></div>
+  </div>
+  <div class="header-right">
+    <div class="conn-status">
+      <div class="conn-dot" id="conn-dot"></div>
+      <span id="conn-label">CONNECTING</span>
+    </div>
+    <div class="live-indicator">
+      <div class="live-dot"></div>
+      LIVE
+    </div>
+    <div class="clock" id="clock">00:00:00</div>
+  </div>
+</div>
+
+<div class="audio-bar">
+  <div class="audio-label">◉ SCANNER — <span>ERIE COUNTY P25 / AMHERST</span></div>
+  <audio id="scanner-audio" controls>
+    <source src="https://broadcastify.cdnstream1.com/40857" type="audio/mpeg">
+  </audio>
+</div>
+
+<div class="main">
+
+  <div class="stats-bar">
+    <div class="stat-box"><div class="stat-label">Total Today</div><div class="stat-value accent" id="stat-total">0</div></div>
+    <div class="stat-box"><div class="stat-label">High Priority</div><div class="stat-value red" id="stat-high">0</div></div>
+    <div class="stat-box"><div class="stat-label">Active Units</div><div class="stat-value green" id="stat-units">0</div></div>
+    <div class="stat-box"><div class="stat-label">Last Incident</div><div class="stat-value yellow" id="stat-last">—</div></div>
+    <div class="stat-box"><div class="stat-label">Avg / Hour</div><div class="stat-value accent" id="stat-rate">0</div></div>
+  </div>
+
+  <div class="feed-panel">
+    <div class="panel-header">
+      <div class="panel-title">◈ Incident Log</div>
+      <div class="incident-count" id="incident-count">0 incidents</div>
+    </div>
+    <div id="incident-feed">
+      <div class="empty-state">
+        <div class="empty-icon">📡</div>
+        <div class="empty-text">Awaiting Dispatch</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="panel-header">
+      <div class="panel-title">◈ Raw Transcripts</div>
+    </div>
+    <div class="transcript-panel" id="transcript-feed">
+      <div class="empty-state">
+        <div class="empty-icon">🎙</div>
+        <div class="empty-text">No Audio Yet</div>
+      </div>
+    </div>
+    <div class="breakdown-panel">
+      <div class="breakdown-title">◈ Incident Types</div>
+      <div id="breakdown-list"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ← PASTE YOUR RENDER URL HERE after deploying
+  const API = 'https://YOUR-RENDER-URL.onrender.com/incidents';
+
+  let knownIds = new Set();
+  let allIncidents = [];
+
+  function updateClock() {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('en-US', { hour12: false });
+  }
+  setInterval(updateClock, 1000);
+  updateClock();
+
+  function pClass(p) { return (p || 'unknown').toLowerCase(); }
+
+  function renderCard(inc) {
+    const pc = pClass(inc.priority);
+    const units = (inc.units || []).map(u => `<span class="unit-tag">${u}</span>`).join('');
+    return `
+      <div class="incident-card ${pc} new-flash" onclick="this.classList.toggle('expanded')" data-id="${inc.id}">
+        <div class="card-top">
+          <div class="incident-type">${inc.incident_type || 'Unknown'}</div>
+          <div class="priority-badge ${pc}">${inc.priority || 'Unknown'}</div>
+        </div>
+        <div class="incident-location">${inc.location || 'Unknown Location'}</div>
+        ${units ? `<div class="incident-units">${units}</div>` : ''}
+        <div class="card-footer">
+          <div class="incident-time">${inc.time_str || ''}</div>
+          <div class="incident-notes">${inc.notes || ''}</div>
+        </div>
+        <div class="incident-transcript">"${inc.transcript || ''}"</div>
+      </div>`;
+  }
+
+  function renderTranscript(inc) {
+    return `
+      <div class="transcript-line">
+        <div class="transcript-time">${inc.time_str || ''}</div>
+        <div class="transcript-text">${inc.transcript || ''}</div>
+      </div>`;
+  }
+
+  function updateStats(incidents) {
+    const today = new Date().toDateString();
+    const todayInc = incidents.filter(i => new Date(i.created_at).toDateString() === today);
+    const high = todayInc.filter(i => (i.priority||'').toLowerCase() === 'high').length;
+    const units = new Set(todayInc.flatMap(i => i.units || []));
+
+    document.getElementById('stat-total').textContent = todayInc.length;
+    document.getElementById('stat-high').textContent = high;
+    document.getElementById('stat-units').textContent = units.size;
+    document.getElementById('incident-count').textContent = `${incidents.length} incidents`;
+    if (incidents.length > 0) document.getElementById('stat-last').textContent = incidents[0].time_str || '—';
+
+    if (todayInc.length > 1) {
+      const first = new Date(todayInc[todayInc.length-1].created_at);
+      const last  = new Date(todayInc[0].created_at);
+      const hrs   = Math.max((last - first) / 3600000, 0.1);
+      document.getElementById('stat-rate').textContent = (todayInc.length / hrs).toFixed(1);
+    }
+
+    const types = {};
+    todayInc.forEach(i => { const t = i.incident_type || 'Unknown'; types[t] = (types[t]||0)+1; });
+    const sorted = Object.entries(types).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    const max = sorted[0]?.[1] || 1;
+    document.getElementById('breakdown-list').innerHTML = sorted.map(([type, count]) => `
+      <div class="breakdown-row">
+        <div class="breakdown-label">${type}</div>
+        <div class="breakdown-bar-bg"><div class="breakdown-bar" style="width:${count/max*100}%"></div></div>
+        <div class="breakdown-count">${count}</div>
+      </div>`).join('');
+  }
+
+  function showToast(inc) {
+    const pc = pClass(inc.priority);
+    const toast = document.createElement('div');
+    toast.className = `toast ${pc}`;
+    toast.innerHTML = `<div class="toast-type">🚨 ${inc.incident_type||'Incident'}</div><div class="toast-loc">${inc.location||'Unknown'}</div>`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+  }
+
+  function setConnStatus(online) {
+    const dot = document.getElementById('conn-dot');
+    const lbl = document.getElementById('conn-label');
+    dot.className = 'conn-dot ' + (online ? 'online' : 'offline');
+    lbl.textContent = online ? 'ONLINE' : 'OFFLINE';
+  }
+
+  async function fetchIncidents() {
+    try {
+      const res = await fetch(API);
+      if (!res.ok) throw new Error('bad response');
+      const incidents = await res.json();
+      setConnStatus(true);
+
+      const newOnes = incidents.filter(i => !knownIds.has(i.id));
+      if (newOnes.length > 0) {
+        const feed = document.getElementById('incident-feed');
+        if (feed.querySelector('.empty-state')) feed.innerHTML = '';
+        const tfeed = document.getElementById('transcript-feed');
+        if (tfeed.querySelector('.empty-state')) tfeed.innerHTML = '';
+
+        newOnes.forEach(inc => {
+          knownIds.add(inc.id);
+          feed.insertAdjacentHTML('afterbegin', renderCard(inc));
+          tfeed.insertAdjacentHTML('afterbegin', renderTranscript(inc));
+          showToast(inc);
+        });
+
+        allIncidents = incidents;
+        updateStats(incidents);
+      }
+    } catch(e) {
+      setConnStatus(false);
+      console.error('Fetch error:', e);
+    }
+  }
+
+  fetchIncidents();
+  setInterval(fetchIncidents, 10000);
+</script>
+</body>
+</html>
