@@ -5,6 +5,9 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
+from flask import Response
+
+clients = []
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -142,3 +145,37 @@ if __name__ == "__main__":
     thread.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+@app.route("/stream")
+def stream():
+    def event_stream():
+        last_id = None
+
+        while True:
+            try:
+                # fetch latest incident only
+                res = supabase.table("incidents") \
+                    .select("*") \
+                    .order("created_at", desc=True) \
+                    .limit(1) \
+                    .execute()
+
+                if res.data:
+                    latest = res.data[0]
+
+                    if latest["id"] != last_id:
+                        last_id = latest["id"]
+                        yield f"data: {json.dumps(latest)}\n\n"
+
+                time.sleep(2)
+
+            except Exception as e:
+                print("SSE error:", e)
+                time.sleep(5)
+
+    return Response(event_stream(), mimetype="text/event-stream")
+
+@app.after_request
+def add_headers(response):
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
