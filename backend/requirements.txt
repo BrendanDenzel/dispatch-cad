@@ -1,0 +1,5 @@
+groq
+supabase
+requests
+flask
+flask-cors
