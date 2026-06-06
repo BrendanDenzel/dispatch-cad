@@ -41,6 +41,30 @@
   .audio-label { font-family: var(--sans); font-size: 11px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
   .audio-label span { color: var(--accent2); }
   audio { flex: 1; height: 32px; }
+  .audio-live-bar { display: flex; align-items: center; gap: 16px; flex: 1; }
+.audio-viz { display: flex; align-items: center; gap: 3px; height: 24px; }
+.audio-viz span { display: block; width: 3px; background: var(--accent2); border-radius: 2px; height: 4px; opacity: 0.3; transition: height 0.1s; }
+.audio-viz.active span { opacity: 1; animation: bar-bounce 0.8s ease-in-out infinite; }
+.audio-viz.active span:nth-child(1) { animation-delay: 0.0s; }
+.audio-viz.active span:nth-child(2) { animation-delay: 0.1s; }
+.audio-viz.active span:nth-child(3) { animation-delay: 0.2s; }
+.audio-viz.active span:nth-child(4) { animation-delay: 0.3s; }
+.audio-viz.active span:nth-child(5) { animation-delay: 0.15s; }
+.audio-viz.active span:nth-child(6) { animation-delay: 0.25s; }
+.audio-viz.active span:nth-child(7) { animation-delay: 0.05s; }
+.audio-viz.active span:nth-child(8) { animation-delay: 0.35s; }
+.audio-viz.active span:nth-child(9) { animation-delay: 0.2s; }
+.audio-viz.active span:nth-child(10) { animation-delay: 0.1s; }
+@keyframes bar-bounce {
+  0%, 100% { height: 4px; }
+  50% { height: 20px; }
+}
+.audio-live-text { font-family: var(--mono); font-size: 11px; color: var(--red); letter-spacing: 3px; display: none; }
+.audio-live-text.active { display: block; animation: pulse-green 1s ease-in-out infinite; }
+.audio-toggle { font-family: var(--mono); font-size: 11px; letter-spacing: 2px; background: transparent; border: 1px solid var(--accent2); color: var(--accent2); padding: 5px 14px; cursor: pointer; transition: all 0.2s; }
+.audio-toggle:hover { background: var(--accent2); color: var(--bg); }
+.audio-toggle.playing { border-color: var(--red); color: var(--red); }
+.audio-toggle.playing:hover { background: var(--red); color: var(--bg); }
 
   .main { display: grid; grid-template-columns: 1fr 340px; height: calc(100vh - 107px); }
 
@@ -143,8 +167,16 @@
 </div>
 
 <div class="audio-bar">
-  <div class="audio-label">◉ SCANNER — <span>ERIE COUNTY P25 / AMHERST</span></div>
-  <audio id="scanner-audio" controls>
+  <div class="audio-label">◉ SCANNER — <span>TOWN OF AMHERST (P25)</span></div>
+  <div class="audio-live-bar">
+    <div class="audio-viz">
+      <span></span><span></span><span></span><span></span><span></span>
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <div class="audio-live-text">LIVE</div>
+    <button class="audio-toggle" id="audio-toggle" onclick="toggleAudio()">▶ LISTEN</button>
+  </div>
+  <audio id="scanner-audio">
     <source src="https://broadcastify.cdnstream1.com/40857" type="audio/mpeg">
   </audio>
 </div>
@@ -312,6 +344,27 @@
 
   fetchIncidents();
   setInterval(fetchIncidents, 10000);
+
+  function toggleAudio() {
+  const audio = document.getElementById('scanner-audio');
+  const btn = document.getElementById('audio-toggle');
+  const viz = document.querySelector('.audio-viz');
+  const liveText = document.querySelector('.audio-live-text');
+
+  if (audio.paused) {
+    audio.play();
+    btn.textContent = '■ STOP';
+    btn.classList.add('playing');
+    viz.classList.add('active');
+    liveText.classList.add('active');
+  } else {
+    audio.pause();
+    btn.textContent = '▶ LISTEN';
+    btn.classList.remove('playing');
+    viz.classList.remove('active');
+    liveText.classList.remove('active');
+  }
+}
 </script>
 </body>
 </html>
