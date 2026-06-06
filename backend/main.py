@@ -1,5 +1,7 @@
+cat > ~/dispatch-cad/backend/main.py << 'EOF'
 import os, io, time, requests, threading, tempfile, json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from flask import Flask, jsonify
 from flask_cors import CORS
 from groq import Groq
@@ -10,6 +12,8 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 STREAM_URL   = os.environ.get("STREAM_URL")
 CHUNK_SECONDS = 30
+
+EASTERN = ZoneInfo("America/New_York")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 supabase    = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -102,7 +106,7 @@ def save_incident(parsed, transcript):
             "priority":      parsed.get("priority", "Unknown"),
             "notes":         parsed.get("notes", ""),
             "transcript":    transcript,
-            "time_str":      datetime.now().strftime("%I:%M %p")
+            "time_str":      datetime.now(EASTERN).strftime("%I:%M %p")
         }
         supabase.table("incidents").insert(row).execute()
         print(f"Saved: {row['incident_type']} @ {row['location']}")
@@ -139,3 +143,4 @@ if __name__ == "__main__":
     thread.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+EOF
