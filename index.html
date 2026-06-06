@@ -320,22 +320,15 @@
       setConnStatus(true);
 
       const newOnes = incidents.filter(i => !knownIds.has(i.id));
-      if (newOnes.length > 0) {
-        const feed = document.getElementById('incident-feed');
-        if (feed.querySelector('.empty-state')) feed.innerHTML = '';
-        const tfeed = document.getElementById('transcript-feed');
-        if (tfeed.querySelector('.empty-state')) tfeed.innerHTML = '';
+      allIncidents = incidents;
 
-        newOnes.forEach(inc => {
-          knownIds.add(inc.id);
-          feed.insertAdjacentHTML('afterbegin', renderCard(inc));
-          tfeed.insertAdjacentHTML('afterbegin', renderTranscript(inc));
-          showToast(inc);
-        });
+const feed = document.getElementById('incident-feed');
+const tfeed = document.getElementById('transcript-feed');
 
-        allIncidents = incidents;
-        updateStats(incidents);
-      }
+feed.innerHTML = incidents.map(renderCard).join('');
+tfeed.innerHTML = incidents.map(renderTranscript).join('');
+
+updateStats(incidents);
     } catch(e) {
       setConnStatus(false);
       console.error('Fetch error:', e);
@@ -343,7 +336,7 @@
   }
 
   fetchIncidents();
-  setInterval(fetchIncidents, 10000);
+  setInterval(fetchIncidents, 5000);
 
   function toggleAudio() {
   const audio = document.getElementById('scanner-audio');
