@@ -6,11 +6,8 @@ import os
 # multiple workers would create duplicate scanners and split the SSE clients list.
 workers = 1
 worker_class = "sync"
-worker_connections = 1000
 timeout = 120
-keepalive = 5
-
-bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
+bind = f"0.0.0.0:{__import__('os').environ.get('PORT', '5000')}"
 
 # Increase timeout for SSE streaming connections
 graceful_timeout = 30
