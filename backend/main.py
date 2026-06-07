@@ -12,7 +12,7 @@ GROQ_API_KEY  = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL  = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY  = os.environ.get("SUPABASE_KEY")
 STREAM_URL    = os.environ.get("STREAM_URL")
-CHUNK_SECONDS = 30
+CHUNK_SECONDS = 15
 MAX_INCIDENTS = 500
 AUDIO_BUCKET  = "audio-clips"
 
