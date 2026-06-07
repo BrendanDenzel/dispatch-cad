@@ -16,10 +16,11 @@ CHUNK_SECONDS = 30
 MAX_INCIDENTS = 500
 AUDIO_BUCKET  = "audio-clips"
 
-EASTERN = ZoneInfo("America/New_York")
-
+EASTERN     = ZoneInfo("America/New_York")
 groq_client = Groq(api_key=GROQ_API_KEY)
-supabase    = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def get_db():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = Flask(__name__)
 CORS(app)
@@ -35,7 +36,7 @@ def ping():
 @app.route("/incidents")
 def get_incidents():
     offset = request.args.get("offset", 0, type=int)
-    res = (supabase.table("incidents")
+    res = (get_db().table("incidents")
            .select("*")
            .order("created_at", desc=True)
            .range(offset, offset + 49)
@@ -65,24 +66,25 @@ def add_headers(response):
 @app.route("/stats")
 def get_stats():
     try:
+        db = get_db()
         now_et = datetime.now(EASTERN)
         today_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start.astimezone(ZoneInfo("UTC")).isoformat()
 
-        all_time = supabase.table("incidents").select("id", count="exact").execute().count or 0
+        all_time = db.table("incidents").select("id", count="exact").execute().count or 0
 
-        total = (supabase.table("incidents")
+        total = (db.table("incidents")
                  .select("id", count="exact")
                  .gte("created_at", today_start_utc)
                  .execute()).count or 0
 
-        high = (supabase.table("incidents")
+        high = (db.table("incidents")
                 .select("id", count="exact")
                 .gte("created_at", today_start_utc)
                 .eq("priority", "High")
                 .execute()).count or 0
 
-        rows = (supabase.table("incidents")
+        rows = (db.table("incidents")
                 .select("units, time_str, created_at, incident_type")
                 .gte("created_at", today_start_utc)
                 .order("created_at", desc=True)
@@ -178,9 +180,10 @@ def trim_silence(audio_bytes: bytes) -> bytes:
 
 def upload_audio(audio_bytes: bytes) -> str | None:
     try:
+        db   = get_db()
         ts   = datetime.now(EASTERN).strftime("%Y%m%d_%H%M%S")
         path = f"clips/clip_{ts}.mp3"
-        supabase.storage.from_(AUDIO_BUCKET).upload(
+        db.storage.from_(AUDIO_BUCKET).upload(
             path, audio_bytes, {"content-type": "audio/mpeg", "upsert": "false"}
         )
         return f"{SUPABASE_URL}/storage/v1/object/public/{AUDIO_BUCKET}/{path}"
@@ -191,9 +194,10 @@ def upload_audio(audio_bytes: bytes) -> str | None:
 
 def delete_audio(audio_url: str):
     try:
+        db     = get_db()
         marker = f"/public/{AUDIO_BUCKET}/"
         if marker in audio_url:
-            supabase.storage.from_(AUDIO_BUCKET).remove([audio_url.split(marker, 1)[1]])
+            db.storage.from_(AUDIO_BUCKET).remove([audio_url.split(marker, 1)[1]])
     except Exception as e:
         print(f"Audio delete error: {e}", flush=True)
 
@@ -252,10 +256,11 @@ def parse_transcript(transcript: str):
 
 def purge_old_incidents():
     try:
-        total = supabase.table("incidents").select("id", count="exact").execute().count or 0
+        db    = get_db()
+        total = db.table("incidents").select("id", count="exact").execute().count or 0
         if total <= MAX_INCIDENTS:
             return
-        oldest = (supabase.table("incidents")
+        oldest = (db.table("incidents")
                   .select("id, audio_url")
                   .order("created_at", desc=False)
                   .limit(total - MAX_INCIDENTS)
@@ -263,7 +268,7 @@ def purge_old_incidents():
         for row in oldest:
             if row.get("audio_url"):
                 delete_audio(row["audio_url"])
-            supabase.table("incidents").delete().eq("id", row["id"]).execute()
+            db.table("incidents").delete().eq("id", row["id"]).execute()
             print(f"Purged incident id={row['id']}", flush=True)
     except Exception as e:
         print(f"Purge error: {e}", flush=True)
@@ -271,6 +276,7 @@ def purge_old_incidents():
 
 def save_incident(parsed: dict, transcript: str, audio_url: str | None):
     try:
+        db  = get_db()
         row = {
             "incident_type": parsed.get("incident_type", "Unknown"),
             "location":      parsed.get("location", "Unknown"),
@@ -281,7 +287,7 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
             "time_str":      datetime.now(EASTERN).strftime("%I:%M %p"),
             "audio_url":     audio_url,
         }
-        res = supabase.table("incidents").insert(row).execute()
+        res   = db.table("incidents").insert(row).execute()
         saved = res.data[0] if res.data else row
         for q in clients:
             q.append(saved)
