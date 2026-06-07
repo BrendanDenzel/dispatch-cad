@@ -39,7 +39,7 @@ def ping():
 def get_incidents():
     db = get_supabase()
     offset = request.args.get("offset", 0, type=int)
-    res = (supabase.table("incidents")
+    res = (db.table("incidents")
            .select("*")
            .order("created_at", desc=True)
            .range(offset, offset + 49)
