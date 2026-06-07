@@ -402,6 +402,10 @@ def start_scanner():
 # in each worker, so this runs in the worker process (not pre-fork).
 start_scanner()
 
+import threading as _threading
+_t = _threading.Thread(target=scanner_loop, daemon=True)
+_t.start()
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port))
