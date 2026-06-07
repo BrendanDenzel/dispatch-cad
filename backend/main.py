@@ -6,7 +6,8 @@ from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
 import sys
-sys.stdout.reconfigure(line_buffering=True)
+import functools
+print = functools.partial(print, flush=True)
 
 clients = []
 
