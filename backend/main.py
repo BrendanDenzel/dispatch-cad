@@ -6,6 +6,8 @@ from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
 from flask import Response
+import sys
+sys.stdout.reconfigure(line_buffering=True)
 
 clients = []
 
@@ -128,7 +130,7 @@ def scanner_loop():
     print("Scanner loop started...")
     while True:
         try:
-            print("Capturing audio chunk...")
+            print("Capturing audio chunk...", flush=True)
             audio = capture_chunk()
             if not audio:
                 time.sleep(5)
@@ -165,14 +167,17 @@ def stream():
 
     return Response(event_stream(), mimetype="text/event-stream")
 
-if __name__ == "__main__":
-    thread = threading.Thread(target=scanner_loop, daemon=True)
-    thread.start()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
-
 @app.after_request
 def add_headers(response):
     response.headers["Cache-Control"] = "no-cache"
     response.headers["X-Accel-Buffering"] = "no"
     return response
+
+# Start scanner thread when module loads (works with gunicorn/Render)
+thread = threading.Thread(target=scanner_loop, daemon=True)
+thread.start()
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
+
