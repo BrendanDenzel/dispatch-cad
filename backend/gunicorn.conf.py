@@ -11,10 +11,3 @@ bind = f"0.0.0.0:{__import__('os').environ.get('PORT', '5000')}"
 
 # Increase timeout for SSE streaming connections
 graceful_timeout = 30
-
-def post_fork(server, worker):
-    """Runs in the worker process after fork. Start the scanner here
-    so it lives in the actual worker, not the pre-fork master."""
-    print(f"[gunicorn] Worker forked (PID {os.getpid()}), starting scanner...", flush=True)
-    from main import start_scanner
-    start_scanner()
