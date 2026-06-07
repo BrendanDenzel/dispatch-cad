@@ -124,7 +124,7 @@ def get_stats():
 
 def capture_chunk():
     try:
-        resp = requests.get(STREAM_URL, stream=True, timeout=10)
+        resp = requests.get(STREAM_URL, stream=True, timeout=(10, 40))
 
         # Flush ~3MB to skip stream backfill buffer and get close to live
         flushed = 0
