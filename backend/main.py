@@ -97,6 +97,71 @@ def capture_chunk():
         return None
 
 
+@app.route("/stats")
+def get_stats():
+    try:
+        # Get today's date range in Eastern Time
+        now_et = datetime.now(EASTERN)
+        today_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start.astimezone(ZoneInfo("UTC")).isoformat()
+
+        # Count all today's incidents
+        total_res = (supabase.table("incidents")
+                     .select("id", count="exact")
+                     .gte("created_at", today_start_utc)
+                     .execute())
+        total = total_res.count or 0
+
+        # Count high priority
+        high_res = (supabase.table("incidents")
+                    .select("id", count="exact")
+                    .gte("created_at", today_start_utc)
+                    .eq("priority", "High")
+                    .execute())
+        high = high_res.count or 0
+
+        # Get units and last call from today's incidents (lightweight, no transcript)
+        detail_res = (supabase.table("incidents")
+                      .select("units, time_str, created_at, incident_type")
+                      .gte("created_at", today_start_utc)
+                      .order("created_at", desc=True)
+                      .execute())
+        rows = detail_res.data or []
+
+        all_units = set()
+        for r in rows:
+            for u in (r.get("units") or []):
+                all_units.add(u)
+
+        last_call = rows[0]["time_str"] if rows else "—"
+
+        # Calls per hour
+        rate = "0"
+        if len(rows) > 1:
+            newest = datetime.fromisoformat(rows[0]["created_at"])
+            oldest = datetime.fromisoformat(rows[-1]["created_at"])
+            hrs = max((newest - oldest).total_seconds() / 3600, 0.1)
+            rate = f"{len(rows) / hrs:.1f}"
+
+        # Breakdown by type
+        types = {}
+        for r in rows:
+            t = r.get("incident_type") or "Unknown"
+            types[t] = types.get(t, 0) + 1
+
+        return jsonify({
+            "total": total,
+            "high": high,
+            "units": len(all_units),
+            "last_call": last_call,
+            "rate": rate,
+            "breakdown": types
+        })
+    except Exception as e:
+        print(f"Stats error: {e}")
+        return jsonify({"total":0,"high":0,"units":0,"last_call":"—","rate":"0","breakdown":{}})
+
+
 
 def trim_silence(audio_bytes: bytes) -> bytes:
     """Use ffmpeg silenceremove filter to strip leading/trailing silence."""
