@@ -71,7 +71,17 @@ def add_headers(response):
 def capture_chunk():
     try:
         resp = requests.get(STREAM_URL, stream=True, timeout=10)
-        buf  = io.BytesIO()
+        
+        # Flush the backfill buffer first (~3MB gets you close to live)
+        flushed = 0
+        flush_target = 3 * 1024 * 1024  # 3MB
+        for chunk in resp.iter_content(chunk_size=4096):
+            flushed += len(chunk)
+            if flushed >= flush_target:
+                break
+
+        # Now capture from closer to live position
+        buf = io.BytesIO()
         bytes_read = 0
         target = 16000 * CHUNK_SECONDS
         for chunk in resp.iter_content(chunk_size=4096):
@@ -79,11 +89,13 @@ def capture_chunk():
             bytes_read += len(chunk)
             if bytes_read >= target:
                 break
+
         resp.close()
         return buf.getvalue()
     except Exception as e:
         print(f"Capture error: {e}")
         return None
+
 
 
 def trim_silence(audio_bytes: bytes) -> bytes:
