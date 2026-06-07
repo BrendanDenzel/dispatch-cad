@@ -2,362 +2,549 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dispatch CAD — Amherst NY</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Amherst PD — CAD</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #080b0f;
-    --surface: #0d1117;
-    --surface2: #111820;
-    --border: #1e2d3d;
-    --accent: #00d4ff;
-    --accent2: #ff6b35;
-    --green: #00ff9d;
-    --yellow: #ffd600;
-    --red: #ff3d5a;
-    --text: #c9d6e3;
-    --muted: #4a6278;
-    --mono: 'Share Tech Mono', monospace;
-    --sans: 'Barlow Condensed', sans-serif;
-    --body: 'Barlow', sans-serif;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { background: var(--bg); color: var(--text); font-family: var(--body); min-height: 100vh; overflow-x: hidden; }
-  body::before { content: ''; position: fixed; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px); pointer-events: none; z-index: 9999; }
-
-  .header { display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 58px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
-  .header-left { display: flex; align-items: center; gap: 16px; }
-  .logo-badge { background: var(--accent); color: var(--bg); font-family: var(--sans); font-weight: 900; font-size: 11px; letter-spacing: 2px; padding: 4px 8px; clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 100%, 6px 100%); }
-  .header-title { font-family: var(--sans); font-weight: 700; font-size: 20px; letter-spacing: 3px; color: #fff; text-transform: uppercase; }
-  .header-title span { color: var(--accent); }
-  .header-right { display: flex; align-items: center; gap: 24px; }
-  .live-indicator { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--green); letter-spacing: 1px; }
-  .live-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; animation: pulse-green 1.5s ease-in-out infinite; box-shadow: 0 0 8px var(--green); }
-  @keyframes pulse-green { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
-  .clock { font-family: var(--mono); font-size: 18px; color: var(--accent); letter-spacing: 2px; }
-
-  .audio-bar { background: var(--surface2); border-bottom: 1px solid var(--border); padding: 10px 28px; display: flex; align-items: center; gap: 20px; }
-  .audio-label { font-family: var(--sans); font-size: 11px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
-  .audio-label span { color: var(--accent2); }
-  audio { flex: 1; height: 32px; }
-  .audio-live-bar { display: flex; align-items: center; gap: 16px; flex: 1; }
-.audio-viz { display: flex; align-items: center; gap: 3px; height: 24px; }
-.audio-viz span { display: block; width: 3px; background: var(--accent2); border-radius: 2px; height: 4px; opacity: 0.3; transition: height 0.1s; }
-.audio-viz.active span { opacity: 1; animation: bar-bounce 0.8s ease-in-out infinite; }
-.audio-viz.active span:nth-child(1) { animation-delay: 0.0s; }
-.audio-viz.active span:nth-child(2) { animation-delay: 0.1s; }
-.audio-viz.active span:nth-child(3) { animation-delay: 0.2s; }
-.audio-viz.active span:nth-child(4) { animation-delay: 0.3s; }
-.audio-viz.active span:nth-child(5) { animation-delay: 0.15s; }
-.audio-viz.active span:nth-child(6) { animation-delay: 0.25s; }
-.audio-viz.active span:nth-child(7) { animation-delay: 0.05s; }
-.audio-viz.active span:nth-child(8) { animation-delay: 0.35s; }
-.audio-viz.active span:nth-child(9) { animation-delay: 0.2s; }
-.audio-viz.active span:nth-child(10) { animation-delay: 0.1s; }
-@keyframes bar-bounce {
-  0%, 100% { height: 4px; }
-  50% { height: 20px; }
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0c0e12;--panel:#13161c;--panel2:#191d24;--panel3:#1f242e;
+  --border:#252a35;--border2:#2e3440;
+  --blue:#2d7dd2;--blue-bright:#4a9eff;--blue-dim:rgba(45,125,210,0.1);
+  --red:#c0392b;--red-bright:#e74c3c;--red-dim:rgba(192,57,43,0.1);
+  --amber:#d68910;--amber-bright:#f39c12;--amber-dim:rgba(214,137,16,0.1);
+  --green:#1e8449;--green-bright:#27ae60;--green-dim:rgba(30,132,73,0.1);
+  --text:#dde2ea;--text2:#8892a0;--text3:#4a5568;
+  --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
 }
-.audio-live-text { font-family: var(--mono); font-size: 11px; color: var(--red); letter-spacing: 3px; display: none; }
-.audio-live-text.active { display: block; animation: pulse-green 1s ease-in-out infinite; }
-.audio-toggle { font-family: var(--mono); font-size: 11px; letter-spacing: 2px; background: transparent; border: 1px solid var(--accent2); color: var(--accent2); padding: 5px 14px; cursor: pointer; transition: all 0.2s; }
-.audio-toggle:hover { background: var(--accent2); color: var(--bg); }
-.audio-toggle.playing { border-color: var(--red); color: var(--red); }
-.audio-toggle.playing:hover { background: var(--red); color: var(--bg); }
+html,body{height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;}
+.topbar{height:48px;background:var(--panel);border-bottom:2px solid var(--blue);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:50;}
+.tb-shield{width:28px;height:28px;background:var(--blue);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.tb-shield svg{width:15px;height:15px;fill:white;}
+.tb-org{display:flex;flex-direction:column;line-height:1.2;}
+.tb-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.3px;}
+.tb-sub{font-size:9px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;}
+.tb-sep{width:1px;height:24px;background:var(--border2);flex-shrink:0;}
+.tb-pill{display:flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--border2);padding:3px 10px;border-radius:3px;}
+.tb-pill-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);}
+.tb-pill-dot.on{background:var(--green-bright);animation:blink 2s ease-in-out infinite;}
+.tb-pill-dot.err{background:var(--red-bright);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.tb-pill-lbl{font-size:10px;color:var(--text2);font-family:var(--mono);letter-spacing:.5px;}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.tb-clock{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--blue-bright);letter-spacing:1.5px;}
+.tb-date{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.5px;text-align:right;}
+.scanbar{height:36px;background:var(--panel2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;}
+.sb-tag{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;}
+.sb-freq{font-family:var(--mono);font-size:10px;color:var(--blue-bright);margin-left:2px;}
+.sb-viz{display:flex;align-items:center;gap:2px;height:18px;}
+.sb-viz span{display:block;width:2px;background:var(--blue);border-radius:1px;height:3px;opacity:.2;}
+.sb-viz.active span{opacity:.9;animation:vb .65s ease-in-out infinite;}
+.sb-viz.active span:nth-child(1){animation-delay:0s}.sb-viz.active span:nth-child(2){animation-delay:.07s}
+.sb-viz.active span:nth-child(3){animation-delay:.14s}.sb-viz.active span:nth-child(4){animation-delay:.21s}
+.sb-viz.active span:nth-child(5){animation-delay:.10s}.sb-viz.active span:nth-child(6){animation-delay:.17s}
+.sb-viz.active span:nth-child(7){animation-delay:.03s}.sb-viz.active span:nth-child(8){animation-delay:.24s}
+@keyframes vb{0%,100%{height:3px}50%{height:15px}}
+.sb-onair{font-family:var(--mono);font-size:9px;color:var(--red-bright);letter-spacing:2px;display:none;}
+.sb-onair.active{display:block;animation:blink 1s ease-in-out infinite;}
+.sb-btn{font-family:var(--mono);font-size:9px;letter-spacing:1px;background:transparent;border:1px solid var(--border2);color:var(--text2);padding:3px 10px;cursor:pointer;border-radius:2px;transition:all .15s;margin-left:auto;}
+.sb-btn:hover{border-color:var(--blue);color:var(--blue-bright);}
+.sb-btn.on{border-color:var(--red-bright);color:var(--red-bright);}
+audio{display:none;}
+.stats{display:flex;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0;}
+.stat{flex:1;padding:8px 14px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:1px;min-width:0;}
+.stat:last-child{border-right:none;}
+.stat-lbl{font-size:9px;font-weight:500;color:var(--text3);letter-spacing:1px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.stat-n{font-family:var(--mono);font-size:22px;font-weight:500;line-height:1.1;}
+.c-blue{color:var(--blue-bright);}.c-red{color:var(--red-bright);}.c-green{color:var(--green-bright);}.c-amber{color:var(--amber-bright);}
+.workspace{display:flex;flex:1;overflow:hidden;min-height:0;}
+.feed-col{display:flex;flex-direction:column;flex:1;min-width:0;}
+.col-hdr{padding:8px 14px;border-bottom:1px solid var(--border);background:var(--panel);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.col-hdr-title{font-size:10px;font-weight:600;color:var(--text2);letter-spacing:1px;text-transform:uppercase;}
+.col-hdr-count{font-family:var(--mono);font-size:10px;color:var(--blue-bright);}
+.feed{flex:1;overflow-y:auto;}.feed::-webkit-scrollbar{width:3px;}.feed::-webkit-scrollbar-thumb{background:var(--border2);}
+.irow{display:grid;grid-template-columns:3px 1fr auto;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;}
+.irow:hover{background:var(--panel2);}
+.irow.new-in{animation:flash .7s ease-out;}
+@keyframes flash{0%{background:rgba(45,125,210,.12)}100%{background:transparent}}
+.irow-bar{width:3px;align-self:stretch;background:var(--border2);}
+.irow-bar.high{background:var(--red-bright);}.irow-bar.medium{background:var(--amber-bright);}.irow-bar.low{background:var(--green-bright);}.irow-bar.unknown{background:var(--text3);}
+.irow-body{padding:10px 12px;min-width:0;}
+.irow-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:3px;}
+.irow-type{font-size:13px;font-weight:600;color:#fff;}
+.irow-time{font-family:var(--mono);font-size:10px;color:var(--text3);white-space:nowrap;padding-top:2px;}
+.irow-loc{font-family:var(--mono);font-size:11px;color:var(--blue-bright);margin-bottom:4px;display:flex;align-items:center;gap:4px;}
+.irow-loc svg{width:10px;height:10px;fill:currentColor;opacity:.6;flex-shrink:0;}
+.irow-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.pri-tag{font-family:var(--mono);font-size:9px;letter-spacing:.8px;padding:2px 6px;border-radius:2px;text-transform:uppercase;border:1px solid transparent;}
+.pri-tag.high{background:var(--red-dim);color:var(--red-bright);border-color:rgba(231,76,60,.2);}
+.pri-tag.medium{background:var(--amber-dim);color:var(--amber-bright);border-color:rgba(243,156,18,.2);}
+.pri-tag.low{background:var(--green-dim);color:var(--green-bright);border-color:rgba(39,174,96,.2);}
+.pri-tag.unknown{background:rgba(74,85,104,.15);color:var(--text3);border-color:var(--border);}
+.unit-chip{font-family:var(--mono);font-size:9px;padding:2px 6px;background:var(--blue-dim);border:1px solid rgba(45,125,210,.2);color:var(--blue-bright);border-radius:2px;}
+.irow-notes{font-size:11px;color:var(--text2);margin-top:4px;line-height:1.4;}
+.irow-arr{padding:10px 10px 10px 0;display:flex;align-items:center;color:var(--text3);font-size:12px;}
+.side{
+  width:290px;
+  flex-shrink:0;
+  display:flex;
+  flex-direction:column;
+  border-left:1px solid var(--border);
+  background:var(--panel);
+  height:100%;
+  min-height:0;
+}
+.tx-feed{flex:1;overflow-y:auto;min-height:0;}.tx-feed::-webkit-scrollbar{width:3px;}.tx-feed::-webkit-scrollbar-thumb{background:var(--border2);}
+.tx-entry{padding:8px 12px;border-bottom:1px solid var(--border);animation:fadeUp .35s ease-out;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
+.tx-time{font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:3px;}
+.tx-bubble{background:var(--panel2);border:1px solid var(--border);border-radius:2px 6px 6px 6px;padding:6px 9px;}
+.tx-line{font-family:var(--mono);font-size:12px;color:var(--text);line-height:1.6;display:block;padding:1px 0;}
+.tx-line+.tx-line{border-top:1px solid rgba(255,255,255,.04);margin-top:3px;padding-top:4px;}
+.bkdn{border-top:1px solid var(--border);padding:10px 12px;flex-shrink:0;}
+.bkdn-ttl{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
+.bkdn-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+.bkdn-lbl{font-size:10px;color:var(--text2);width:85px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bkdn-track{flex:1;height:3px;background:var(--border2);border-radius:2px;overflow:hidden;}
+.bkdn-fill{height:100%;background:var(--blue);border-radius:2px;transition:width .5s ease;}
+.bkdn-n{font-family:var(--mono);font-size:10px;color:var(--text3);width:18px;text-align:right;}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:10px;}
+.empty svg{width:32px;height:32px;stroke:var(--text3);fill:none;stroke-width:1.5;opacity:.4;}
+.empty-msg{font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);}
+.toast{position:fixed;bottom:16px;right:16px;z-index:9000;background:var(--panel2);border:1px solid var(--border2);border-left:3px solid var(--blue);border-radius:3px;padding:10px 14px;min-width:220px;max-width:280px;animation:toastIn .25s ease-out;}
+.toast.high{border-left-color:var(--red-bright);}.toast.medium{border-left-color:var(--amber-bright);}
+@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.toast-hd{display:flex;align-items:center;gap:7px;margin-bottom:3px;}
+.toast-dot{width:6px;height:6px;border-radius:50%;background:var(--blue);flex-shrink:0;}
+.toast.high .toast-dot{background:var(--red-bright);}.toast.medium .toast-dot{background:var(--amber-bright);}
+.toast-type{font-size:12px;font-weight:600;color:#fff;}
+.toast-loc{font-family:var(--mono);font-size:10px;color:var(--text2);}
 
-  .main { display: grid; grid-template-columns: 1fr 340px; height: calc(100vh - 107px); }
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8000;align-items:center;justify-content:center;padding:16px;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--border2);border-radius:4px;width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column;animation:modalIn .2s ease-out;overflow:hidden;}
+@keyframes modalIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+.modal-hdr{padding:14px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;background:var(--panel2);flex-shrink:0;}
+.modal-hdr-left{display:flex;align-items:center;gap:10px;}
+.modal-hdr-bar{width:4px;height:32px;border-radius:2px;background:var(--blue);}
+.modal-hdr-bar.high{background:var(--red-bright);}.modal-hdr-bar.medium{background:var(--amber-bright);}.modal-hdr-bar.low{background:var(--green-bright);}
+.modal-title{font-size:16px;font-weight:700;color:#fff;}
+.modal-sub{font-size:11px;color:var(--text2);margin-top:1px;font-family:var(--mono);}
+.modal-close{background:transparent;border:1px solid var(--border2);color:var(--text2);width:28px;height:28px;border-radius:3px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.modal-close:hover{border-color:var(--red-bright);color:var(--red-bright);}
+.modal-body{overflow-y:auto;flex:1;}.modal-body::-webkit-scrollbar{width:4px;}.modal-body::-webkit-scrollbar-thumb{background:var(--border2);}
+.m-section{border-bottom:1px solid var(--border);padding:14px 18px;}
+.m-section:last-child{border-bottom:none;}
+.m-section-title{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:10px;}
+.m-table{width:100%;border-collapse:collapse;}
+.m-table tr{border-bottom:1px solid var(--border);}
+.m-table tr:last-child{border-bottom:none;}
+.m-table td{padding:7px 0;vertical-align:top;font-size:12px;}
+.m-table td:first-child{color:var(--text2);width:140px;font-weight:500;padding-right:12px;}
+.m-table td:last-child{color:var(--text);font-family:var(--mono);font-size:11px;}
+.m-chips{display:flex;gap:5px;flex-wrap:wrap;}
+.m-chip{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:2px;background:var(--blue-dim);border:1px solid rgba(45,125,210,.2);color:var(--blue-bright);}
+.m-chip.red{background:var(--red-dim);border-color:rgba(231,76,60,.2);color:var(--red-bright);}
+.m-chip.amber{background:var(--amber-dim);border-color:rgba(243,156,18,.2);color:var(--amber-bright);}
+.m-chip.green{background:var(--green-dim);border-color:rgba(39,174,96,.2);color:var(--green-bright);}
+.m-id{font-family:var(--mono);font-size:10px;color:var(--text3);}
+.m-pri{display:inline-flex;align-items:center;gap:6px;}
+.m-pri-dot{width:8px;height:8px;border-radius:50%;}
 
-  .stats-bar { grid-column: 1 / -1; display: flex; gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
-  .stat-box { flex: 1; background: var(--surface); padding: 14px 20px; display: flex; flex-direction: column; gap: 4px; }
-  .stat-label { font-family: var(--sans); font-size: 10px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; }
-  .stat-value { font-family: var(--sans); font-size: 28px; font-weight: 900; color: #fff; line-height: 1; }
-  .stat-value.accent { color: var(--accent); }
-  .stat-value.green { color: var(--green); }
-  .stat-value.red { color: var(--red); }
-  .stat-value.yellow { color: var(--yellow); }
+/* Location link + map */
+.loc-link{
+  color:var(--blue-bright);text-decoration:none;font-family:var(--mono);font-size:11px;
+  display:inline-flex;align-items:center;gap:5px;cursor:pointer;
+  border-bottom:1px solid rgba(74,158,255,.3);padding-bottom:1px;transition:border-color .15s;
+}
+.loc-link:hover{border-color:var(--blue-bright);}
+.loc-link svg{width:11px;height:11px;fill:currentColor;opacity:.7;flex-shrink:0;}
+.map-container{margin-top:8px;border:1px solid var(--border2);border-radius:3px;overflow:hidden;height:200px;background:var(--panel3);display:none;}
+.map-container.visible{display:block;}
+.map-container iframe{width:100%;height:100%;border:none;display:block;}
+.map-toggle-hint{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:6px;opacity:.6;}
 
-  .feed-panel { background: var(--bg); overflow-y: auto; border-right: 1px solid var(--border); grid-row: 2; }
-  .feed-panel::-webkit-scrollbar { width: 4px; }
-  .feed-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+/* Transcript lines in modal */
+.m-tx-box{background:var(--panel2);border:1px solid var(--border2);border-radius:3px;padding:10px 12px;}
+.m-tx-line{font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.65;display:block;padding:2px 0;}
+.m-tx-line+.m-tx-line{border-top:1px solid rgba(255,255,255,.05);margin-top:4px;padding-top:6px;}
 
-  .panel-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--bg); z-index: 10; }
-  .panel-title { font-family: var(--sans); font-size: 11px; letter-spacing: 4px; color: var(--muted); text-transform: uppercase; }
-  .incident-count { font-family: var(--mono); font-size: 11px; color: var(--accent); }
-
-  .incident-card { border-bottom: 1px solid var(--border); padding: 16px 20px; cursor: pointer; transition: background 0.15s; position: relative; overflow: hidden; }
-  .incident-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); }
-  .incident-card.high::before { background: var(--red); }
-  .incident-card.medium::before { background: var(--yellow); }
-  .incident-card.low::before { background: var(--green); }
-  .incident-card.unknown::before { background: var(--muted); }
-  .incident-card:hover { background: var(--surface2); }
-  .incident-card.new-flash { animation: newFlash 0.8s ease-out; }
-  @keyframes newFlash { 0% { background: rgba(0,212,255,0.15); } 100% { background: transparent; } }
-
-  .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .incident-type { font-family: var(--sans); font-weight: 700; font-size: 16px; letter-spacing: 1px; color: #fff; text-transform: uppercase; }
-  .priority-badge { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; padding: 3px 8px; border-radius: 2px; text-transform: uppercase; }
-  .priority-badge.high { background: rgba(255,61,90,0.15); color: var(--red); border: 1px solid rgba(255,61,90,0.3); }
-  .priority-badge.medium { background: rgba(255,214,0,0.1); color: var(--yellow); border: 1px solid rgba(255,214,0,0.3); }
-  .priority-badge.low { background: rgba(0,255,157,0.1); color: var(--green); border: 1px solid rgba(0,255,157,0.3); }
-  .priority-badge.unknown { background: rgba(74,98,120,0.2); color: var(--muted); border: 1px solid var(--border); }
-  .incident-location { font-family: var(--mono); font-size: 12px; color: var(--accent); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-  .incident-location::before { content: '◈'; font-size: 10px; opacity: 0.6; }
-  .incident-units { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
-  .unit-tag { font-family: var(--mono); font-size: 10px; padding: 2px 7px; background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.2); color: var(--accent); border-radius: 2px; letter-spacing: 1px; }
-  .incident-transcript { font-size: 12px; color: var(--muted); line-height: 1.5; font-style: italic; border-left: 2px solid var(--border); padding-left: 10px; margin-top: 8px; display: none; }
-  .incident-card.expanded .incident-transcript { display: block; }
-  .card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
-  .incident-time { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-  .incident-notes { font-size: 12px; color: var(--text); opacity: 0.7; max-width: 70%; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  .side-panel { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); grid-row: 2; }
-  .transcript-panel { flex: 1; overflow-y: auto; }
-  .transcript-panel::-webkit-scrollbar { width: 4px; }
-  .transcript-panel::-webkit-scrollbar-thumb { background: var(--border); }
-  .transcript-line { padding: 10px 16px; border-bottom: 1px solid var(--border); animation: fadeIn 0.4s ease-out; }
-  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  .transcript-time { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 4px; }
-  .transcript-text { font-family: var(--mono); font-size: 12px; color: var(--text); line-height: 1.5; }
-
-  .breakdown-panel { border-top: 1px solid var(--border); padding: 16px; }
-  .breakdown-title { font-family: var(--sans); font-size: 10px; letter-spacing: 4px; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; }
-  .breakdown-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-  .breakdown-label { font-family: var(--mono); font-size: 11px; color: var(--text); width: 100px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .breakdown-bar-bg { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
-  .breakdown-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.6s ease; }
-  .breakdown-count { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 20px; text-align: right; }
-
-  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; gap: 12px; color: var(--muted); }
-  .empty-icon { font-size: 32px; opacity: 0.3; }
-  .empty-text { font-family: var(--mono); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
-
-  .toast { position: fixed; top: 70px; right: 20px; background: var(--surface2); border: 1px solid var(--accent); border-left: 4px solid var(--accent); padding: 12px 18px; min-width: 280px; z-index: 1000; animation: toastIn 0.3s ease-out; box-shadow: 0 4px 24px rgba(0,212,255,0.15); }
-  .toast.high { border-color: var(--red); box-shadow: 0 4px 24px rgba(255,61,90,0.2); }
-  @keyframes toastIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
-  .toast-type { font-family: var(--sans); font-weight: 700; font-size: 14px; color: #fff; letter-spacing: 1px; text-transform: uppercase; }
-  .toast-loc { font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 4px; }
-  .toast.high .toast-loc { color: var(--red); }
-
-  .conn-status { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; display: flex; align-items: center; gap: 6px; }
-  .conn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-  .conn-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .conn-dot.offline { background: var(--red); }
+/* Mobile */
+.mob-nav{display:none;border-top:1px solid var(--border);background:var(--panel);flex-shrink:0;}
+.mob-nav-inner{display:flex;}
+.mnb{flex:1;padding:9px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;cursor:pointer;color:var(--text3);border-top:2px solid transparent;transition:all .15s;}
+.mnb.active{color:var(--blue-bright);border-top-color:var(--blue-bright);}
+.mnb svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.5;}
+.mnb-lbl{font-size:9px;letter-spacing:.5px;text-transform:uppercase;font-family:var(--mono);}
+@media(max-width:860px){.side{display:none;}.stat .stat-lbl{font-size:8px;}.stat-n{font-size:18px;}}
+@media(max-width:580px){
+  html,body{overflow:auto;height:auto;}
+  .topbar{padding:0 10px;}.tb-sub,.tb-date{display:none;}.tb-clock{font-size:14px;}
+  .stats{overflow-x:auto;}.stat{min-width:68px;padding:6px 10px;}
+  .workspace{flex-direction:column;overflow:visible;flex:none;}
+  .feed-col{border-right:none;}.feed{height:auto;overflow:visible;}
+  .side{width:100%;display:none;border-left:none;border-top:1px solid var(--border);}
+  .side.mob-show{display:flex;max-height:50vh;}
+  .mob-nav{display:block;}.modal{max-height:95vh;}
+}
+@media(min-width:581px) and (max-width:860px){.stats .stat:nth-child(5){display:none;}}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-left">
-    <div class="logo-badge">CAD</div>
-    <div class="header-title">Amherst <span>Dispatch</span></div>
+<div class="topbar">
+  <div class="tb-shield"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v6c0 5.25 3.75 10.15 9 11.35C17.25 23.15 21 18.25 21 13V7L12 2z"/></svg></div>
+  <div class="tb-org">
+    <div class="tb-name">Amherst Police Department</div>
+    <div class="tb-sub">Computer Aided Dispatch · Erie County NY</div>
   </div>
-  <div class="header-right">
-    <div class="conn-status">
-      <div class="conn-dot" id="conn-dot"></div>
-      <span id="conn-label">CONNECTING</span>
-    </div>
-    <div class="live-indicator">
-      <div class="live-dot"></div>
-      LIVE
-    </div>
-    <div class="clock" id="clock">00:00:00</div>
+  <div class="tb-sep"></div>
+  <div class="tb-pill"><div class="tb-pill-dot" id="conn-dot"></div><span class="tb-pill-lbl" id="conn-label">CONNECTING</span></div>
+  <div class="tb-pill"><div class="tb-pill-dot on"></div><span class="tb-pill-lbl">SYSTEM LIVE</span></div>
+  <div class="tb-right">
+    <div><div class="tb-clock" id="clock">00:00:00</div><div class="tb-date" id="dateline"></div></div>
   </div>
 </div>
 
-<div class="audio-bar">
-  <div class="audio-label">◉ SCANNER — <span>TOWN OF AMHERST (P25)</span></div>
-  <div class="audio-live-bar">
-    <div class="audio-viz">
-      <span></span><span></span><span></span><span></span><span></span>
-      <span></span><span></span><span></span><span></span><span></span>
-    </div>
-    <div class="audio-live-text">LIVE</div>
-    <button class="audio-toggle" id="audio-toggle" onclick="toggleAudio()">▶ LISTEN</button>
-  </div>
-  <audio id="scanner-audio">
-    <source src="https://broadcastify.cdnstream1.com/40857" type="audio/mpeg">
-  </audio>
+<div class="scanbar">
+  <span class="sb-tag">Scanner</span>
+  <span class="sb-freq">P25 · 40857 · AMHERST PD</span>
+  <div class="sb-viz" id="sb-viz"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <span class="sb-onair" id="sb-onair">ON AIR</span>
+  <button class="sb-btn" id="sb-btn" onclick="toggleAudio()">▶ Monitor</button>
+  <audio id="scanner-audio"><source src="https://broadcastify.cdnstream1.com/40857" type="audio/mpeg"></audio>
 </div>
 
-<div class="main">
+<div class="stats">
+  <div class="stat"><div class="stat-lbl">Total Today</div><div class="stat-n c-blue" id="stat-total">0</div></div>
+  <div class="stat"><div class="stat-lbl">Priority 1</div><div class="stat-n c-red" id="stat-high">0</div></div>
+  <div class="stat"><div class="stat-lbl">Units Active</div><div class="stat-n c-green" id="stat-units">0</div></div>
+  <div class="stat"><div class="stat-lbl">Last Call</div><div class="stat-n c-amber" id="stat-last">—</div></div>
+  <div class="stat"><div class="stat-lbl">Calls / Hr</div><div class="stat-n c-blue" id="stat-rate">0</div></div>
+</div>
 
-  <div class="stats-bar">
-    <div class="stat-box"><div class="stat-label">Total Today</div><div class="stat-value accent" id="stat-total">0</div></div>
-    <div class="stat-box"><div class="stat-label">High Priority</div><div class="stat-value red" id="stat-high">0</div></div>
-    <div class="stat-box"><div class="stat-label">Active Units</div><div class="stat-value green" id="stat-units">0</div></div>
-    <div class="stat-box"><div class="stat-label">Last Incident</div><div class="stat-value yellow" id="stat-last">—</div></div>
-    <div class="stat-box"><div class="stat-label">Avg / Hour</div><div class="stat-value accent" id="stat-rate">0</div></div>
-  </div>
-
-  <div class="feed-panel">
-    <div class="panel-header">
-      <div class="panel-title">◈ Incident Log</div>
-      <div class="incident-count" id="incident-count">0 incidents</div>
+<div class="workspace" id="workspace">
+  <div class="feed-col" id="view-feed">
+    <div class="col-hdr"><span class="col-hdr-title">Active Incidents</span><span class="col-hdr-count" id="incident-count">0 calls</span></div>
+    <div class="feed" id="incident-feed">
+      <div class="empty"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.0 2.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><div class="empty-msg">Awaiting Dispatch</div></div>
     </div>
-    <div id="incident-feed">
-      <div class="empty-state">
-        <div class="empty-icon">📡</div>
-        <div class="empty-text">Awaiting Dispatch</div>
+  </div>
+  <div class="side" id="view-side">
+    <div class="col-hdr"><span class="col-hdr-title">Radio Log</span></div>
+    <div class="bkdn">
+  <div class="bkdn-ttl">Incident Types</div>
+  <div id="breakdown-list"></div>
+</div>
+
+<div class="tx-feed" id="transcript-feed">
+  </div>
+</div>
+
+<div class="mob-nav">
+  <div class="mob-nav-inner">
+    <button class="mnb active" id="mnb-inc" onclick="mobTab('feed')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
+      <span class="mnb-lbl">Incidents</span>
+    </button>
+    <button class="mnb" id="mnb-rad" onclick="mobTab('side')">
+      <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+      <span class="mnb-lbl">Radio</span>
+    </button>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-hdr">
+      <div class="modal-hdr-left">
+        <div class="modal-hdr-bar" id="modal-bar"></div>
+        <div><div class="modal-title" id="modal-title">Incident</div><div class="modal-sub" id="modal-sub"></div></div>
       </div>
+      <button class="modal-close" onclick="closeModalDirect()">✕</button>
     </div>
+    <div class="modal-body" id="modal-body"></div>
   </div>
-
-  <div class="side-panel">
-    <div class="panel-header">
-      <div class="panel-title">◈ Raw Transcripts</div>
-    </div>
-    <div class="transcript-panel" id="transcript-feed">
-      <div class="empty-state">
-        <div class="empty-icon">🎙</div>
-        <div class="empty-text">No Audio Yet</div>
-      </div>
-    </div>
-    <div class="breakdown-panel">
-      <div class="breakdown-title">◈ Incident Types</div>
-      <div id="breakdown-list"></div>
-    </div>
-  </div>
-
 </div>
 
 <script>
-  // ← PASTE YOUR RENDER URL HERE after deploying
-  const API = 'https://dispatch-cad.onrender.com/incidents';
+const API='https://dispatch-cad.onrender.com/incidents';
+let knownIds=new Set(),allIncidents=[],incidentMap={};
 
-  let knownIds = new Set();
-  let allIncidents = [];
+function updateClock(){
+  const n=new Date();
+  document.getElementById('clock').textContent=n.toLocaleTimeString('en-US',{hour12:false});
+  document.getElementById('dateline').textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
+}
+setInterval(updateClock,1000);updateClock();
 
-  function updateClock() {
-    document.getElementById('clock').textContent =
-      new Date().toLocaleTimeString('en-US', { hour12: false });
-  }
-  setInterval(updateClock, 1000);
-  updateClock();
-
-  function pClass(p) { return (p || 'unknown').toLowerCase(); }
-
-  function renderCard(inc) {
-    const pc = pClass(inc.priority);
-    const units = (inc.units || []).map(u => `<span class="unit-tag">${u}</span>`).join('');
-    return `
-      <div class="incident-card ${pc} new-flash" onclick="this.classList.toggle('expanded')" data-id="${inc.id}">
-        <div class="card-top">
-          <div class="incident-type">${inc.incident_type || 'Unknown'}</div>
-          <div class="priority-badge ${pc}">${inc.priority || 'Unknown'}</div>
-        </div>
-        <div class="incident-location">${inc.location || 'Unknown Location'}</div>
-        ${units ? `<div class="incident-units">${units}</div>` : ''}
-        <div class="card-footer">
-          <div class="incident-time">${inc.time_str || ''}</div>
-          <div class="incident-notes">${inc.notes || ''}</div>
-        </div>
-        <div class="incident-transcript">"${inc.transcript || ''}"</div>
-      </div>`;
-  }
-
-  function renderTranscript(inc) {
-    return `
-      <div class="transcript-line">
-        <div class="transcript-time">${inc.time_str || ''}</div>
-        <div class="transcript-text">${inc.transcript || ''}</div>
-      </div>`;
-  }
-
-  function updateStats(incidents) {
-    const today = new Date().toDateString();
-    const todayInc = incidents.filter(i => new Date(i.created_at).toDateString() === today);
-    const high = todayInc.filter(i => (i.priority||'').toLowerCase() === 'high').length;
-    const units = new Set(todayInc.flatMap(i => i.units || []));
-
-    document.getElementById('stat-total').textContent = todayInc.length;
-    document.getElementById('stat-high').textContent = high;
-    document.getElementById('stat-units').textContent = units.size;
-    document.getElementById('incident-count').textContent = `${incidents.length} incidents`;
-    if (incidents.length > 0) document.getElementById('stat-last').textContent = incidents[0].time_str || '—';
-
-    if (todayInc.length > 1) {
-      const first = new Date(todayInc[todayInc.length-1].created_at);
-      const last  = new Date(todayInc[0].created_at);
-      const hrs   = Math.max((last - first) / 3600000, 0.1);
-      document.getElementById('stat-rate').textContent = (todayInc.length / hrs).toFixed(1);
-    }
-
-    const types = {};
-    todayInc.forEach(i => { const t = i.incident_type || 'Unknown'; types[t] = (types[t]||0)+1; });
-    const sorted = Object.entries(types).sort((a,b)=>b[1]-a[1]).slice(0,6);
-    const max = sorted[0]?.[1] || 1;
-    document.getElementById('breakdown-list').innerHTML = sorted.map(([type, count]) => `
-      <div class="breakdown-row">
-        <div class="breakdown-label">${type}</div>
-        <div class="breakdown-bar-bg"><div class="breakdown-bar" style="width:${count/max*100}%"></div></div>
-        <div class="breakdown-count">${count}</div>
-      </div>`).join('');
-  }
-
-  function showToast(inc) {
-    const pc = pClass(inc.priority);
-    const toast = document.createElement('div');
-    toast.className = `toast ${pc}`;
-    toast.innerHTML = `<div class="toast-type">🚨 ${inc.incident_type||'Incident'}</div><div class="toast-loc">${inc.location||'Unknown'}</div>`;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 5000);
-  }
-
-  function setConnStatus(online) {
-    const dot = document.getElementById('conn-dot');
-    const lbl = document.getElementById('conn-label');
-    dot.className = 'conn-dot ' + (online ? 'online' : 'offline');
-    lbl.textContent = online ? 'ONLINE' : 'OFFLINE';
-  }
-
-  async function fetchIncidents() {
-    try {
-      const res = await fetch(API);
-      if (!res.ok) throw new Error('bad response');
-      const incidents = await res.json();
-      setConnStatus(true);
-
-      const newOnes = incidents.filter(i => !knownIds.has(i.id));
-      allIncidents = incidents;
-
-const feed = document.getElementById('incident-feed');
-const tfeed = document.getElementById('transcript-feed');
-
-feed.innerHTML = incidents.map(renderCard).join('');
-tfeed.innerHTML = incidents.map(renderTranscript).join('');
-
-updateStats(incidents);
-    } catch(e) {
-      setConnStatus(false);
-      console.error('Fetch error:', e);
-    }
-  }
-
-  fetchIncidents();
-  setInterval(fetchIncidents, 5000);
-
-  function toggleAudio() {
-  const audio = document.getElementById('scanner-audio');
-  const btn = document.getElementById('audio-toggle');
-  const viz = document.querySelector('.audio-viz');
-  const liveText = document.querySelector('.audio-live-text');
-
-  if (audio.paused) {
-    audio.play();
-    btn.textContent = '■ STOP';
-    btn.classList.add('playing');
-    viz.classList.add('active');
-    liveText.classList.add('active');
-  } else {
-    audio.pause();
-    btn.textContent = '▶ LISTEN';
-    btn.classList.remove('playing');
-    viz.classList.remove('active');
-    liveText.classList.remove('active');
+function toggleAudio(){
+  const a=document.getElementById('scanner-audio');
+  const btn=document.getElementById('sb-btn');
+  const viz=document.getElementById('sb-viz');
+  const oa=document.getElementById('sb-onair');
+  if(a.paused){
+    a.play().catch(()=>{});
+    btn.textContent='■ Stop';btn.classList.add('on');
+    viz.classList.add('active');oa.classList.add('active');
+  }else{
+    a.pause();
+    btn.textContent='▶ Monitor';btn.classList.remove('on');
+    viz.classList.remove('active');oa.classList.remove('active');
   }
 }
+
+function mobTab(tab){
+  const feed=document.getElementById('view-feed');
+  const side=document.getElementById('view-side');
+  const bi=document.getElementById('mnb-inc');
+  const br=document.getElementById('mnb-rad');
+  if(tab==='feed'){
+    feed.style.display='flex';side.classList.remove('mob-show');
+    bi.classList.add('active');br.classList.remove('active');
+  }else{
+    feed.style.display='none';side.classList.add('mob-show');
+    br.classList.add('active');bi.classList.remove('active');
+  }
+}
+
+function pClass(p){return(p||'unknown').toLowerCase();}
+
+function makeIncidentId(inc){
+  const ts=inc.created_at?new Date(inc.created_at).getTime():Date.now();
+  return 'INC-'+String(ts).slice(-6).toUpperCase();
+}
+
+/* Split transcript into sentence-based lines */
+function splitTranscript(text){
+  if(!text||text.trim().length===0) return [];
+  const lines=text
+    .replace(/([.!?])\s+([A-Z])/g,'$1|||$2')
+    .replace(/,\s+(unit\s+\d|[A-Z]\d{2,})/gi,'|||$1')
+    .split('|||')
+    .map(s=>s.trim())
+    .filter(s=>s.length>3);
+  return lines.length>0?lines:[text];
+}
+
+/* Render transcript bubble for side panel */
+function renderTxBubble(text){
+  const lines=splitTranscript(text);
+  return lines.map(l=>`<span class="tx-line">${l}</span>`).join('');
+}
+
+/* Render transcript lines for modal */
+function renderModalTx(text){
+  const lines=splitTranscript(text);
+  return lines.map(l=>`<span class="m-tx-line">${l}</span>`).join('');
+}
+
+function renderRow(inc){
+  const pc=pClass(inc.priority);
+  const units=(inc.units||[]).map(u=>`<span class="unit-chip">${u}</span>`).join('');
+  const priLabel={high:'Priority 1',medium:'Priority 2',low:'Priority 3',unknown:'Unknown'}[pc]||inc.priority;
+  return `<div class="irow new-in" data-id="${inc.id}" onclick="openModal('${inc.id}')">
+    <div class="irow-bar ${pc}"></div>
+    <div class="irow-body">
+      <div class="irow-top">
+        <div class="irow-type">${inc.incident_type||'Unknown'}</div>
+        <div class="irow-time">${inc.time_str||''}</div>
+      </div>
+      <div class="irow-loc">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        ${inc.location||'Location Unknown'}
+      </div>
+      <div class="irow-foot">
+        <span class="pri-tag ${pc}">${priLabel}</span>
+        ${units}
+      </div>
+      ${inc.notes?`<div class="irow-notes">${inc.notes}</div>`:''}
+    </div>
+    <div class="irow-arr">›</div>
+  </div>`;
+}
+
+function renderTx(inc){
+  return `<div class="tx-entry">
+    <div class="tx-time">${inc.time_str||''} · ${inc.incident_type||'Radio'}</div>
+    <div class="tx-bubble">${renderTxBubble(inc.transcript||'')}</div>
+  </div>`;
+}
+
+function updateStats(incidents){
+  const today=new Date().toDateString();
+  const t=incidents.filter(i=>new Date(i.created_at).toDateString()===today);
+  const high=t.filter(i=>(i.priority||'').toLowerCase()==='high').length;
+  const units=new Set(t.flatMap(i=>i.units||[]));
+  document.getElementById('stat-total').textContent=t.length;
+  document.getElementById('stat-high').textContent=high;
+  document.getElementById('stat-units').textContent=units.size;
+  document.getElementById('incident-count').textContent=`${incidents.length} calls`;
+  if(incidents.length>0) document.getElementById('stat-last').textContent=incidents[0].time_str||'—';
+  if(t.length>1){
+    const hrs=Math.max((new Date(t[0].created_at)-new Date(t[t.length-1].created_at))/3600000,.1);
+    document.getElementById('stat-rate').textContent=(t.length/hrs).toFixed(1);
+  }
+  const types={};
+  t.forEach(i=>{const n=i.incident_type||'Unknown';types[n]=(types[n]||0)+1;});
+  const sorted=Object.entries(types).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const max=sorted[0]?.[1]||1;
+  document.getElementById('breakdown-list').innerHTML=sorted.map(([tp,ct])=>`
+    <div class="bkdn-row">
+      <div class="bkdn-lbl">${tp}</div>
+      <div class="bkdn-track"><div class="bkdn-fill" style="width:${ct/max*100}%"></div></div>
+      <div class="bkdn-n">${ct}</div>
+    </div>`).join('');
+}
+
+function showToast(inc){
+  const pc=pClass(inc.priority);
+  const t=document.createElement('div');
+  t.className=`toast ${pc}`;
+  t.innerHTML=`<div class="toast-hd"><div class="toast-dot"></div><div class="toast-type">${inc.incident_type||'Incident'}</div></div><div class="toast-loc">${inc.location||'Unknown location'}</div>`;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),5000);
+}
+
+function setConn(on){
+  document.getElementById('conn-dot').className='tb-pill-dot '+(on?'on':'err');
+  document.getElementById('conn-label').textContent=on?'CONNECTED':'OFFLINE';
+}
+
+/* ── Map toggle ── */
+function toggleMap(loc){
+  const container=document.getElementById('map-embed-container');
+  if(!container) return;
+  if(container.classList.contains('visible')){
+    container.classList.remove('visible');
+    return;
+  }
+  const q=encodeURIComponent(loc+', Amherst NY');
+  container.innerHTML=`<iframe
+    loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade"
+    src="https://www.google.com/maps?q=${q}&output=embed"
+    allowfullscreen>
+  </iframe>`;
+  container.classList.add('visible');
+}
+
+/* ── Modal ── */
+function openModal(id){
+  const inc=incidentMap[id];
+  if(!inc) return;
+  const pc=pClass(inc.priority);
+  const priLabel={high:'Priority 1 — High',medium:'Priority 2 — Medium',low:'Priority 3 — Low',unknown:'Unknown Priority'}[pc]||inc.priority;
+  const priChipClass={high:'red',medium:'amber',low:'green',unknown:''}[pc]||'';
+  const incId=makeIncidentId(inc);
+  const createdFull=inc.created_at?new Date(inc.created_at).toLocaleString('en-US',{timeZone:'America/New_York',hour12:false}):'—';
+  const units=inc.units||[];
+  const unitChips=units.length
+    ?units.map(u=>`<span class="m-chip">${u}</span>`).join('')
+    :'<span style="color:var(--text3);font-size:11px;">—</span>';
+
+  const loc=inc.location||'Unknown';
+  const locIsKnown=loc!=='Unknown'&&loc!=='Unknown Location'&&loc.length>3;
+
+  const locCell=locIsKnown
+    ?`<span class="loc-link" onclick="toggleMap('${loc.replace(/'/g,"\\'")}')">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        ${loc}
+      </span>
+      <span class="map-toggle-hint">↓ click to map</span>
+      <div class="map-container" id="map-embed-container"></div>`
+    :`${loc}`;
+
+  document.getElementById('modal-title').textContent=inc.incident_type||'Unknown Incident';
+  document.getElementById('modal-sub').textContent=`${incId} · ${inc.time_str||''} · ${loc}`;
+  document.getElementById('modal-bar').className='modal-hdr-bar '+pc;
+
+  document.getElementById('modal-body').innerHTML=`
+    <div class="m-section">
+      <div class="m-section-title">Incident Details</div>
+      <table class="m-table">
+        <tr><td>Incident ID</td><td><span class="m-id">${incId}</span></td></tr>
+        <tr><td>Created</td><td>${createdFull} ET</td></tr>
+        <tr><td>Type</td><td>${inc.incident_type||'Unknown'}</td></tr>
+        <tr><td>Priority</td><td>
+          <div class="m-pri">
+            <div class="m-pri-dot" style="background:var(--${pc==='high'?'red':pc==='medium'?'amber':pc==='low'?'green':'text3'}-bright)"></div>
+            ${priLabel}
+          </div>
+        </td></tr>
+        <tr><td>Location</td><td>${locCell}</td></tr>
+        <tr><td>Units Assigned</td><td><div class="m-chips">${unitChips}</div></td></tr>
+        <tr><td>Notes</td><td>${inc.notes||'—'}</td></tr>
+      </table>
+    </div>
+    <div class="m-section">
+      <div class="m-section-title">Radio Transcript</div>
+      <div class="m-tx-box">${renderModalTx(inc.transcript||'No transcript available.')}</div>
+    </div>
+    <div class="m-section">
+      <div class="m-section-title">Classification</div>
+      <table class="m-table">
+        <tr><td>Incident Type</td><td><span class="m-chip ${priChipClass}">${inc.incident_type||'Unknown'}</span></td></tr>
+        <tr><td>Priority Level</td><td><span class="m-chip ${priChipClass}">${inc.priority||'Unknown'}</span></td></tr>
+        <tr><td>Source</td><td>Amherst PD · P25 Scanner · Groq Whisper</td></tr>
+        <tr><td>Talkgroup</td><td>40857 · Erie County NY</td></tr>
+      </table>
+    </div>`;
+
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(e){if(e.target===document.getElementById('modal-overlay')) closeModalDirect();}
+function closeModalDirect(){document.getElementById('modal-overlay').classList.remove('open');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModalDirect();});
+
+/* ── SSE ── */
+const sseStream=new EventSource('https://dispatch-cad.onrender.com/stream');
+sseStream.onopen=()=>setConn(true);
+sseStream.onerror=()=>setConn(false);
+sseStream.onmessage=(event)=>{
+  let inc;try{inc=JSON.parse(event.data);}catch(e){return;}
+  if(!inc||knownIds.has(inc.id)) return;
+  knownIds.add(inc.id);
+  incidentMap[inc.id]=inc;
+  allIncidents.unshift(inc);
+  const feed=document.getElementById('incident-feed');
+  if(feed.querySelector('.empty')) feed.innerHTML='';
+  feed.insertAdjacentHTML('afterbegin',renderRow(inc));
+  const tfeed=document.getElementById('transcript-feed');
+  if(tfeed.querySelector('.empty')) tfeed.innerHTML='';
+  tfeed.insertAdjacentHTML('afterbegin',renderTx(inc));
+  updateStats(allIncidents);
+  showToast(inc);
+};
+
+/* ── Initial load ── */
+async function fetchIncidents(){
+  try{
+    const res=await fetch(API);
+    if(!res.ok) throw new Error();
+    const incidents=await res.json();
+    setConn(true);
+    allIncidents=incidents;
+    incidents.forEach(i=>{knownIds.add(i.id);incidentMap[i.id]=i;});
+    const feed=document.getElementById('incident-feed');
+    const tfeed=document.getElementById('transcript-feed');
+    if(incidents.length>0){
+      feed.innerHTML='';tfeed.innerHTML='';
+      incidents.forEach(i=>{
+        feed.insertAdjacentHTML('beforeend',renderRow(i));
+        tfeed.insertAdjacentHTML('beforeend',renderTx(i));
+      });
+    }
+    updateStats(allIncidents);
+  }catch(e){setConn(false);console.error(e);}
+}
+fetchIncidents();
 </script>
 </body>
 </html>
