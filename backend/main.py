@@ -5,8 +5,6 @@ from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
-from pydub import AudioSegment
-from pydub.silence import detect_nonsilent
 import sys
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -89,31 +87,46 @@ def capture_chunk():
 
 
 def trim_silence(audio_bytes: bytes) -> bytes:
-    """Strip leading/trailing silence from MP3 bytes. Returns trimmed MP3 bytes."""
+    """Use ffmpeg silenceremove filter to strip leading/trailing silence."""
     try:
-        audio = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
-        nonsilent = detect_nonsilent(
-            audio,
-            min_silence_len=500,  # ms — gaps shorter than this are kept
-            silence_thresh=-40    # dBFS — raise to -35 if too much silence kept
-        )
-        if not nonsilent:
-            print("Trim: all silence, skipping upload.")
-            return b""  # signal that it's pure silence
-        # Pad 200ms around actual speech
-        start = max(0, nonsilent[0][0] - 200)
-        end   = min(len(audio), nonsilent[-1][1] + 200)
-        trimmed = audio[start:end]
-        buf = io.BytesIO()
-        trimmed.export(buf, format="mp3", bitrate="64k")
-        original_kb  = len(audio_bytes) // 1024
-        trimmed_kb   = buf.tell() // 1024
-        print(f"Trim: {original_kb}KB → {trimmed_kb}KB ({len(audio)}ms → {end-start}ms)")
-        buf.seek(0)
-        return buf.read()
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as fin:
+            fin.write(audio_bytes)
+            in_path = fin.name
+        out_path = in_path.replace(".mp3", "_trimmed.mp3")
+
+        import subprocess
+        result = subprocess.run([
+            "ffmpeg", "-y", "-i", in_path,
+            "-af",
+            "silenceremove=start_periods=1:start_silence=0.5:start_threshold=-40dB"
+            ":stop_periods=-1:stop_silence=0.5:stop_threshold=-40dB",
+            "-b:a", "64k",
+            out_path
+        ], capture_output=True, timeout=30)
+
+        os.unlink(in_path)
+
+        if result.returncode != 0 or not os.path.exists(out_path):
+            print("ffmpeg trim failed, using original")
+            return audio_bytes
+
+        with open(out_path, "rb") as f:
+            trimmed = f.read()
+        os.unlink(out_path)
+
+        if len(trimmed) < 1000:
+            print("Trim: result too small, likely pure silence")
+            return b""
+
+        original_kb = len(audio_bytes) // 1024
+        trimmed_kb  = len(trimmed) // 1024
+        print(f"Trim: {original_kb}KB → {trimmed_kb}KB")
+        return trimmed
+
     except Exception as e:
         print(f"Trim error: {e}")
-        return audio_bytes  # fall back to original on error
+        return audio_bytes
+
 
 
 def upload_audio(audio_bytes: bytes) -> str | None:
