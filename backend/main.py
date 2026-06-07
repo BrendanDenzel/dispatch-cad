@@ -351,7 +351,11 @@ def scanner_loop():
             time.sleep(10)
 
 
-thread = threading.Thread(target=scanner_loop, daemon=True)
+def delayed_start():
+    time.sleep(15)
+    scanner_loop()
+
+thread = threading.Thread(target=delayed_start, daemon=True)
 thread.start()
 
 if __name__ == "__main__":
