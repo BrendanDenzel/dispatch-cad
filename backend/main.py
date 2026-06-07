@@ -1,7 +1,7 @@
 import os, io, time, requests, threading, tempfile, json
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
@@ -31,7 +31,8 @@ def ping():
 
 @app.route("/incidents")
 def get_incidents():
-    res = supabase.table("incidents").select("*").order("created_at", desc=True).limit(100).execute()
+    offset = request.args.get("offset", 0, type=int)
+    res = supabase.table("incidents").select("*").order("created_at", desc=True).range(offset, offset + 49).execute()
     return jsonify(res.data)
 
 def capture_chunk():
@@ -180,4 +181,3 @@ thread.start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
