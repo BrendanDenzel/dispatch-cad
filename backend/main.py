@@ -37,6 +37,7 @@ def ping():
 
 @app.route("/incidents")
 def get_incidents():
+    db = get_supabase()
     offset = request.args.get("offset", 0, type=int)
     res = (supabase.table("incidents")
            .select("*")
@@ -100,27 +101,28 @@ def capture_chunk():
 
 @app.route("/stats")
 def get_stats():
+    db = get_supabase()
     try:
         # Get today's date range in Eastern Time
         now_et = datetime.now(EASTERN)
         today_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start.astimezone(ZoneInfo("UTC")).isoformat()
         # Add this query inside get_stats()
-        all_time_res = (supabase.table("incidents")
+        all_time_res = (db.table("incidents")
                 .select("id", count="exact")
                 .execute())
         all_time = all_time_res.count or 0
 
 
         # Count all today's incidents
-        total_res = (supabase.table("incidents")
+        total_res = (db.table("incidents")
                      .select("id", count="exact")
                      .gte("created_at", today_start_utc)
                      .execute())
         total = total_res.count or 0
 
         # Count high priority
-        high_res = (supabase.table("incidents")
+        high_res = (db.table("incidents")
                     .select("id", count="exact")
                     .gte("created_at", today_start_utc)
                     .eq("priority", "High")
@@ -128,7 +130,7 @@ def get_stats():
         high = high_res.count or 0
 
         # Get units and last call from today's incidents (lightweight, no transcript)
-        detail_res = (supabase.table("incidents")
+        detail_res = (db.table("incidents")
                       .select("units, time_str, created_at, incident_type")
                       .gte("created_at", today_start_utc)
                       .order("created_at", desc=True)
@@ -217,11 +219,12 @@ def trim_silence(audio_bytes: bytes) -> bytes:
 
 
 def upload_audio(audio_bytes: bytes) -> str | None:
+    db = get_supabase()
     try:
         ts       = datetime.now(EASTERN).strftime("%Y%m%d_%H%M%S")
         filename = f"clip_{ts}.mp3"
         path     = f"clips/{filename}"
-        supabase.storage.from_(AUDIO_BUCKET).upload(
+        db.storage.from_(AUDIO_BUCKET).upload(
             path,
             audio_bytes,
             {"content-type": "audio/mpeg", "upsert": "false"},
@@ -297,15 +300,16 @@ def parse_transcript(transcript: str):
 
 
 def purge_old_incidents():
+    db = get_supabase()
     try:
-        count_res = (supabase.table("incidents")
+        count_res = (db.table("incidents")
                      .select("id", count="exact")
                      .execute())
         total = count_res.count or 0
         if total <= MAX_INCIDENTS:
             return
         excess = total - MAX_INCIDENTS
-        oldest = (supabase.table("incidents")
+        oldest = (db.table("incidents")
                   .select("id, audio_url")
                   .order("created_at", desc=False)
                   .limit(excess)
@@ -313,13 +317,14 @@ def purge_old_incidents():
         for row in (oldest.data or []):
             if row.get("audio_url"):
                 delete_audio(row["audio_url"])
-            supabase.table("incidents").delete().eq("id", row["id"]).execute()
+            db.table("incidents").delete().eq("id", row["id"]).execute()
             print(f"Purged old incident id={row['id']}")
     except Exception as e:
         print(f"Purge error: {e}")
 
 
 def save_incident(parsed: dict, transcript: str, audio_url: str | None):
+    db = get_supabase()
     try:
         row = {
             "incident_type": parsed.get("incident_type", "Unknown"),
@@ -331,7 +336,7 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
             "time_str":      datetime.now(EASTERN).strftime("%I:%M %p"),
             "audio_url":     audio_url,
         }
-        res   = supabase.table("incidents").insert(row).execute()
+        res   = db.table("incidents").insert(row).execute()
         saved = res.data[0] if res.data else row
         for q in clients:
             q.append(saved)
