@@ -352,52 +352,52 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
 # ─────────────────────────────────────────────
 
 def scanner_loop():
-    print("Scanner loop started...")
+    print("Scanner loop started...", flush=True)
     while True:
         try:
             print("Capturing audio chunk...", flush=True)
             audio = capture_chunk()
             if not audio:
+                print("No audio captured, sleeping.", flush=True)
                 time.sleep(5)
                 continue
 
-            # Step 1: trim silence — if result is empty bytes it was pure silence
-            print("Trimming silence...")
+            print(f"Captured {len(audio)} bytes, trimming...", flush=True)
             trimmed = trim_silence(audio)
+            print(f"After trim: {len(trimmed)} bytes", flush=True)
             if not trimmed:
-                print("Pure silence, skipping.")
+                print("Pure silence, skipping.", flush=True)
                 continue
 
-            # Step 2: transcribe and upload IN PARALLEL (upload uses trimmed audio)
-            print("Transcribing + uploading in parallel...")
+            print("Transcribing + uploading in parallel...", flush=True)
             with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
                 transcribe_future = ex.submit(transcribe, trimmed)
                 upload_future     = ex.submit(upload_audio, trimmed)
                 transcript = transcribe_future.result()
                 audio_url  = upload_future.result()
 
-            print(f"Transcript: {transcript[:100] if transcript else 'empty'}")
+            print(f"Transcript ({len(transcript)} chars): {transcript[:120]!r}", flush=True)
 
-            # Step 3: if transcript too short, clean up and skip
             if len(transcript) < 15:
-                print("Too short, skipping.")
+                print("Too short, skipping.", flush=True)
                 if audio_url:
                     delete_audio(audio_url)
                 continue
 
-            # Step 4: parse
-            print("Parsing...")
+            print("Parsing...", flush=True)
             parsed = parse_transcript(transcript)
 
             if parsed:
                 save_incident(parsed, transcript, audio_url)
             else:
-                print("No incident detected.")
+                print("No incident detected, cleaning up audio.", flush=True)
                 if audio_url:
                     delete_audio(audio_url)
 
         except Exception as e:
-            print(f"Loop error: {e}")
+            import traceback
+            print(f"Loop error: {e}", flush=True)
+            traceback.print_exc()
             time.sleep(10)
 
 
