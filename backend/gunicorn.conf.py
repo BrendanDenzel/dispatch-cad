@@ -1,13 +1,13 @@
-# gunicorn.conf.py
-import threading
 import os
 
-# Single worker — scanner loop uses one persistent stream connection,
-# multiple workers would create duplicate scanners and split the SSE clients list.
 workers = 1
 worker_class = "sync"
 timeout = 120
-bind = f"0.0.0.0:{__import__('os').environ.get('PORT', '5000')}"
+bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
 
-# Increase timeout for SSE streaming connections
-graceful_timeout = 30
+def post_fork(server, worker):
+    import threading
+    from main import scanner_loop
+    print(f"[gunicorn] Worker forked (PID {os.getpid()}), starting scanner...", flush=True)
+    t = threading.Thread(target=scanner_loop, daemon=True)
+    t.start()
