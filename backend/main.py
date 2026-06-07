@@ -1,10 +1,12 @@
-import os, io, time, requests, threading, tempfile, json
+import os, io, time, requests, threading, tempfile, json, concurrent.futures
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
+from pydub import AudioSegment
+from pydub.silence import detect_nonsilent
 import sys
 sys.stdout.reconfigure(line_buffering=True)
 
@@ -15,8 +17,8 @@ SUPABASE_URL  = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY  = os.environ.get("SUPABASE_KEY")
 STREAM_URL    = os.environ.get("STREAM_URL")
 CHUNK_SECONDS = 30
-MAX_INCIDENTS = 500                          # ← purge threshold
-AUDIO_BUCKET  = "audio-clips"               # ← Supabase storage bucket name
+MAX_INCIDENTS = 500
+AUDIO_BUCKET  = "audio-clips"
 
 EASTERN = ZoneInfo("America/New_York")
 
@@ -69,7 +71,6 @@ def add_headers(response):
 # ─────────────────────────────────────────────
 
 def capture_chunk():
-    """Capture ~CHUNK_SECONDS of audio and return raw bytes."""
     try:
         resp = requests.get(STREAM_URL, stream=True, timeout=10)
         buf  = io.BytesIO()
@@ -87,30 +88,59 @@ def capture_chunk():
         return None
 
 
+def trim_silence(audio_bytes: bytes) -> bytes:
+    """Strip leading/trailing silence from MP3 bytes. Returns trimmed MP3 bytes."""
+    try:
+        audio = AudioSegment.from_mp3(io.BytesIO(audio_bytes))
+        nonsilent = detect_nonsilent(
+            audio,
+            min_silence_len=500,  # ms — gaps shorter than this are kept
+            silence_thresh=-40    # dBFS — raise to -35 if too much silence kept
+        )
+        if not nonsilent:
+            print("Trim: all silence, skipping upload.")
+            return b""  # signal that it's pure silence
+        # Pad 200ms around actual speech
+        start = max(0, nonsilent[0][0] - 200)
+        end   = min(len(audio), nonsilent[-1][1] + 200)
+        trimmed = audio[start:end]
+        buf = io.BytesIO()
+        trimmed.export(buf, format="mp3", bitrate="64k")
+        original_kb  = len(audio_bytes) // 1024
+        trimmed_kb   = buf.tell() // 1024
+        print(f"Trim: {original_kb}KB → {trimmed_kb}KB ({len(audio)}ms → {end-start}ms)")
+        buf.seek(0)
+        return buf.read()
+    except Exception as e:
+        print(f"Trim error: {e}")
+        return audio_bytes  # fall back to original on error
+
+
 def upload_audio(audio_bytes: bytes) -> str | None:
-    """
-    Upload MP3 bytes to Supabase Storage and return the public URL.
-    Returns None on failure.
-    """
     try:
         ts       = datetime.now(EASTERN).strftime("%Y%m%d_%H%M%S")
         filename = f"clip_{ts}.mp3"
         path     = f"clips/{filename}"
-
         supabase.storage.from_(AUDIO_BUCKET).upload(
             path,
             audio_bytes,
             {"content-type": "audio/mpeg", "upsert": "false"},
         )
-
-        # Build public URL
-        public_url = (
-            f"{SUPABASE_URL}/storage/v1/object/public/{AUDIO_BUCKET}/{path}"
-        )
-        return public_url
+        return f"{SUPABASE_URL}/storage/v1/object/public/{AUDIO_BUCKET}/{path}"
     except Exception as e:
         print(f"Audio upload error: {e}")
         return None
+
+
+def delete_audio(audio_url: str):
+    """Helper to remove a clip from storage given its public URL."""
+    try:
+        marker = f"/public/{AUDIO_BUCKET}/"
+        if marker in audio_url:
+            clip_path = audio_url.split(marker, 1)[1]
+            supabase.storage.from_(AUDIO_BUCKET).remove([clip_path])
+    except Exception as e:
+        print(f"Audio delete error: {e}")
 
 
 def transcribe(audio_bytes: bytes) -> str:
@@ -167,44 +197,24 @@ def parse_transcript(transcript: str):
 
 
 def purge_old_incidents():
-    """
-    If the incidents table has more than MAX_INCIDENTS rows,
-    delete the oldest one(s) so we stay at or below the cap.
-    Also deletes the associated audio file from storage.
-    """
     try:
         count_res = (supabase.table("incidents")
                      .select("id", count="exact")
                      .execute())
         total = count_res.count or 0
-
         if total <= MAX_INCIDENTS:
             return
-
         excess = total - MAX_INCIDENTS
         oldest = (supabase.table("incidents")
                   .select("id, audio_url")
                   .order("created_at", desc=False)
                   .limit(excess)
                   .execute())
-
         for row in (oldest.data or []):
-            # Delete audio from storage if present
-            audio_url = row.get("audio_url")
-            if audio_url:
-                try:
-                    # Extract the storage path from the URL
-                    # URL format: .../storage/v1/object/public/<bucket>/<path>
-                    marker = f"/public/{AUDIO_BUCKET}/"
-                    if marker in audio_url:
-                        clip_path = audio_url.split(marker, 1)[1]
-                        supabase.storage.from_(AUDIO_BUCKET).remove([clip_path])
-                except Exception as ae:
-                    print(f"Audio purge error: {ae}")
-
+            if row.get("audio_url"):
+                delete_audio(row["audio_url"])
             supabase.table("incidents").delete().eq("id", row["id"]).execute()
             print(f"Purged old incident id={row['id']}")
-
     except Exception as e:
         print(f"Purge error: {e}")
 
@@ -219,21 +229,14 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
             "notes":         parsed.get("notes", ""),
             "transcript":    transcript,
             "time_str":      datetime.now(EASTERN).strftime("%I:%M %p"),
-            "audio_url":     audio_url,   # ← new column
+            "audio_url":     audio_url,
         }
-
         res   = supabase.table("incidents").insert(row).execute()
         saved = res.data[0] if res.data else row
-
-        # Push to all SSE clients
         for q in clients:
             q.append(saved)
-
         print(f"Saved + broadcasted: {row['incident_type']}")
-
-        # Purge oldest if over the cap
         purge_old_incidents()
-
     except Exception as e:
         print(f"Save error: {e}")
 
@@ -252,27 +255,31 @@ def scanner_loop():
                 time.sleep(5)
                 continue
 
-            # Upload audio FIRST (so we have URL before saving incident)
-            print("Uploading audio clip...")
-            audio_url = upload_audio(audio)
-
-            print("Transcribing...")
-            transcript = transcribe(audio)
-            print(f"Transcript: {transcript[:100] if transcript else 'empty'}")
-
-            if len(transcript) < 15:
-                print("Too short, skipping.")
-                # Clean up the orphaned audio if we uploaded it
-                if audio_url:
-                    try:
-                        marker = f"/public/{AUDIO_BUCKET}/"
-                        if marker in audio_url:
-                            clip_path = audio_url.split(marker, 1)[1]
-                            supabase.storage.from_(AUDIO_BUCKET).remove([clip_path])
-                    except Exception:
-                        pass
+            # Step 1: trim silence — if result is empty bytes it was pure silence
+            print("Trimming silence...")
+            trimmed = trim_silence(audio)
+            if not trimmed:
+                print("Pure silence, skipping.")
                 continue
 
+            # Step 2: transcribe and upload IN PARALLEL (upload uses trimmed audio)
+            print("Transcribing + uploading in parallel...")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+                transcribe_future = ex.submit(transcribe, trimmed)
+                upload_future     = ex.submit(upload_audio, trimmed)
+                transcript = transcribe_future.result()
+                audio_url  = upload_future.result()
+
+            print(f"Transcript: {transcript[:100] if transcript else 'empty'}")
+
+            # Step 3: if transcript too short, clean up and skip
+            if len(transcript) < 15:
+                print("Too short, skipping.")
+                if audio_url:
+                    delete_audio(audio_url)
+                continue
+
+            # Step 4: parse
             print("Parsing...")
             parsed = parse_transcript(transcript)
 
@@ -280,22 +287,14 @@ def scanner_loop():
                 save_incident(parsed, transcript, audio_url)
             else:
                 print("No incident detected.")
-                # Clean up orphaned audio
                 if audio_url:
-                    try:
-                        marker = f"/public/{AUDIO_BUCKET}/"
-                        if marker in audio_url:
-                            clip_path = audio_url.split(marker, 1)[1]
-                            supabase.storage.from_(AUDIO_BUCKET).remove([clip_path])
-                    except Exception:
-                        pass
+                    delete_audio(audio_url)
 
         except Exception as e:
             print(f"Loop error: {e}")
             time.sleep(10)
 
 
-# Start scanner thread when module loads (works with gunicorn/Render)
 thread = threading.Thread(target=scanner_loop, daemon=True)
 thread.start()
 
