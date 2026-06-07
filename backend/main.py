@@ -21,7 +21,8 @@ AUDIO_BUCKET  = "audio-clips"
 EASTERN = ZoneInfo("America/New_York")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
-supabase    = create_client(SUPABASE_URL, SUPABASE_KEY)
+def get_supabase():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = Flask(__name__)
 CORS(app)
