@@ -1,6 +1,6 @@
+flask
+flask-cors
 groq
 supabase
 requests
-flask
-flask-cors
 gunicorn
