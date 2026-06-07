@@ -1,4 +1,4 @@
-import os, io, time, requests, threading, tempfile, json, concurrent.futures
+import os, io, time, requests, threading, tempfile, json, subprocess
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, request, Response
@@ -18,12 +18,9 @@ CHUNK_SECONDS = 30
 MAX_INCIDENTS = 500
 AUDIO_BUCKET  = "audio-clips"
 
-EASTERN = ZoneInfo("America/New_York")
-
+EASTERN  = ZoneInfo("America/New_York")
 groq_client = Groq(api_key=GROQ_API_KEY)
-
-def get_supabase():
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase    = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = Flask(__name__)
 CORS(app)
@@ -38,9 +35,8 @@ def ping():
 
 @app.route("/incidents")
 def get_incidents():
-    db = get_supabase()
     offset = request.args.get("offset", 0, type=int)
-    res = (db.table("incidents")
+    res = (supabase.table("incidents")
            .select("*")
            .order("created_at", desc=True)
            .range(offset, offset + 49)
@@ -69,40 +65,31 @@ def add_headers(response):
 
 @app.route("/stats")
 def get_stats():
-    db = get_supabase()
     try:
         now_et = datetime.now(EASTERN)
         today_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start.astimezone(ZoneInfo("UTC")).isoformat()
 
-        all_time_res = db.table("incidents").select("id", count="exact").execute()
-        all_time = all_time_res.count or 0
+        all_time = supabase.table("incidents").select("id", count="exact").execute().count or 0
 
-        total_res = (db.table("incidents")
-                     .select("id", count="exact")
-                     .gte("created_at", today_start_utc)
-                     .execute())
-        total = total_res.count or 0
+        total = (supabase.table("incidents")
+                 .select("id", count="exact")
+                 .gte("created_at", today_start_utc)
+                 .execute()).count or 0
 
-        high_res = (db.table("incidents")
-                    .select("id", count="exact")
-                    .gte("created_at", today_start_utc)
-                    .eq("priority", "High")
-                    .execute())
-        high = high_res.count or 0
+        high = (supabase.table("incidents")
+                .select("id", count="exact")
+                .gte("created_at", today_start_utc)
+                .eq("priority", "High")
+                .execute()).count or 0
 
-        detail_res = (db.table("incidents")
-                      .select("units, time_str, created_at, incident_type")
-                      .gte("created_at", today_start_utc)
-                      .order("created_at", desc=True)
-                      .execute())
-        rows = detail_res.data or []
+        rows = (supabase.table("incidents")
+                .select("units, time_str, created_at, incident_type")
+                .gte("created_at", today_start_utc)
+                .order("created_at", desc=True)
+                .execute()).data or []
 
-        all_units = set()
-        for r in rows:
-            for u in (r.get("units") or []):
-                all_units.add(u)
-
+        all_units = {u for r in rows for u in (r.get("units") or [])}
         last_call = rows[0]["time_str"] if rows else "—"
 
         rate = "0"
@@ -138,15 +125,15 @@ def capture_chunk():
     try:
         resp = requests.get(STREAM_URL, stream=True, timeout=10)
 
+        # Flush ~3MB to skip stream backfill buffer and get close to live
         flushed = 0
-        flush_target = 3 * 1024 * 1024
         for chunk in resp.iter_content(chunk_size=4096):
             flushed += len(chunk)
-            if flushed >= flush_target:
+            if flushed >= 3 * 1024 * 1024:
                 break
 
-        buf = io.BytesIO()
-        bytes_read = 0
+        # Now capture CHUNK_SECONDS worth
+        buf, bytes_read = io.BytesIO(), 0
         target = 16000 * CHUNK_SECONDS
         for chunk in resp.iter_content(chunk_size=4096):
             buf.write(chunk)
@@ -168,7 +155,6 @@ def trim_silence(audio_bytes: bytes) -> bytes:
             in_path = fin.name
         out_path = in_path.replace(".mp3", "_trimmed.mp3")
 
-        import subprocess
         result = subprocess.run([
             "ffmpeg", "-y", "-i", in_path,
             "-af",
@@ -181,7 +167,7 @@ def trim_silence(audio_bytes: bytes) -> bytes:
         os.unlink(in_path)
 
         if result.returncode != 0 or not os.path.exists(out_path):
-            print(f"ffmpeg trim failed (rc={result.returncode}), using original", flush=True)
+            print(f"ffmpeg failed, using original audio", flush=True)
             return audio_bytes
 
         with open(out_path, "rb") as f:
@@ -189,7 +175,7 @@ def trim_silence(audio_bytes: bytes) -> bytes:
         os.unlink(out_path)
 
         if len(trimmed) < 1000:
-            print("Trim: result too small, likely pure silence", flush=True)
+            print("Trimmed result too small — pure silence, skipping", flush=True)
             return b""
 
         print(f"Trim: {len(audio_bytes)//1024}KB → {len(trimmed)//1024}KB", flush=True)
@@ -201,19 +187,14 @@ def trim_silence(audio_bytes: bytes) -> bytes:
 
 
 def upload_audio(audio_bytes: bytes) -> str | None:
-    db = get_supabase()
     try:
-        ts       = datetime.now(EASTERN).strftime("%Y%m%d_%H%M%S")
-        filename = f"clip_{ts}.mp3"
-        path     = f"clips/{filename}"
-        db.storage.from_(AUDIO_BUCKET).upload(
-            path,
-            audio_bytes,
-            {"content-type": "audio/mpeg", "upsert": "false"},
+        path = f"clips/clip_{datetime.now(EASTERN).strftime('%Y%m%d_%H%M%S')}.mp3"
+        supabase.storage.from_(AUDIO_BUCKET).upload(
+            path, audio_bytes, {"content-type": "audio/mpeg", "upsert": "false"}
         )
         return f"{SUPABASE_URL}/storage/v1/object/public/{AUDIO_BUCKET}/{path}"
     except Exception as e:
-        print(f"Audio upload error: {e}", flush=True)
+        print(f"Upload error: {e}", flush=True)
         return None
 
 
@@ -221,11 +202,9 @@ def delete_audio(audio_url: str):
     try:
         marker = f"/public/{AUDIO_BUCKET}/"
         if marker in audio_url:
-            clip_path = audio_url.split(marker, 1)[1]
-            db = get_supabase()
-            db.storage.from_(AUDIO_BUCKET).remove([clip_path])
+            supabase.storage.from_(AUDIO_BUCKET).remove([audio_url.split(marker, 1)[1]])
     except Exception as e:
-        print(f"Audio delete error: {e}", flush=True)
+        print(f"Delete audio error: {e}", flush=True)
 
 
 def transcribe(audio_bytes: bytes) -> str:
@@ -274,37 +253,32 @@ def parse_transcript(transcript: str):
         text = resp.choices[0].message.content.strip()
         if text.lower() == "null":
             return None
-        text = text.replace("```json", "").replace("```", "").strip()
-        return json.loads(text)
+        return json.loads(text.replace("```json", "").replace("```", "").strip())
     except Exception as e:
         print(f"Parse error: {e}", flush=True)
         return None
 
 
 def purge_old_incidents():
-    db = get_supabase()
     try:
-        count_res = db.table("incidents").select("id", count="exact").execute()
-        total = count_res.count or 0
+        total = supabase.table("incidents").select("id", count="exact").execute().count or 0
         if total <= MAX_INCIDENTS:
             return
-        excess = total - MAX_INCIDENTS
-        oldest = (db.table("incidents")
+        oldest = (supabase.table("incidents")
                   .select("id, audio_url")
                   .order("created_at", desc=False)
-                  .limit(excess)
-                  .execute())
-        for row in (oldest.data or []):
+                  .limit(total - MAX_INCIDENTS)
+                  .execute()).data or []
+        for row in oldest:
             if row.get("audio_url"):
                 delete_audio(row["audio_url"])
-            db.table("incidents").delete().eq("id", row["id"]).execute()
-            print(f"Purged old incident id={row['id']}", flush=True)
+            supabase.table("incidents").delete().eq("id", row["id"]).execute()
+            print(f"Purged incident id={row['id']}", flush=True)
     except Exception as e:
         print(f"Purge error: {e}", flush=True)
 
 
 def save_incident(parsed: dict, transcript: str, audio_url: str | None):
-    db = get_supabase()
     try:
         row = {
             "incident_type": parsed.get("incident_type", "Unknown"),
@@ -316,7 +290,7 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
             "time_str":      datetime.now(EASTERN).strftime("%I:%M %p"),
             "audio_url":     audio_url,
         }
-        res   = db.table("incidents").insert(row).execute()
+        res = supabase.table("incidents").insert(row).execute()
         saved = res.data[0] if res.data else row
         for q in clients:
             q.append(saved)
@@ -327,7 +301,7 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
 
 
 # ─────────────────────────────────────────────
-# Scanner loop
+# Main scanner loop
 # ─────────────────────────────────────────────
 
 def scanner_loop():
@@ -337,25 +311,21 @@ def scanner_loop():
             print("Capturing audio chunk...", flush=True)
             audio = capture_chunk()
             if not audio:
-                print("No audio captured, sleeping.", flush=True)
                 time.sleep(5)
                 continue
 
-            print(f"Captured {len(audio)} bytes, trimming...", flush=True)
+            print("Trimming silence...", flush=True)
             trimmed = trim_silence(audio)
-            print(f"After trim: {len(trimmed)} bytes", flush=True)
             if not trimmed:
                 print("Pure silence, skipping.", flush=True)
                 continue
 
-            print("Transcribing + uploading in parallel...", flush=True)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-                transcribe_future = ex.submit(transcribe, trimmed)
-                upload_future     = ex.submit(upload_audio, trimmed)
-                transcript = transcribe_future.result()
-                audio_url  = upload_future.result()
+            print("Uploading audio...", flush=True)
+            audio_url = upload_audio(trimmed)
 
-            print(f"Transcript ({len(transcript)} chars): {transcript[:120]!r}", flush=True)
+            print("Transcribing...", flush=True)
+            transcript = transcribe(trimmed)
+            print(f"Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
 
             if len(transcript) < 15:
                 print("Too short, skipping.", flush=True)
@@ -369,7 +339,7 @@ def scanner_loop():
             if parsed:
                 save_incident(parsed, transcript, audio_url)
             else:
-                print("No incident detected, cleaning up audio.", flush=True)
+                print("No incident detected, cleaning up.", flush=True)
                 if audio_url:
                     delete_audio(audio_url)
 
@@ -379,15 +349,9 @@ def scanner_loop():
             traceback.print_exc()
             time.sleep(10)
 
-# ─────────────────────────────────────────────
-# Thread startup — works with both gunicorn and
-# direct `python app.py`. The os.getpid() guard
-# ensures only ONE worker starts the scanner
-# (prevents duplicate loops when gunicorn forks).
-# ─────────────────────────────────────────────
 
-_t = threading.Thread(target=scanner_loop, daemon=True)
-_t.start()
+thread = threading.Thread(target=scanner_loop, daemon=True)
+thread.start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
