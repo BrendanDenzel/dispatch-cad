@@ -3,4 +3,3 @@ supabase
 requests
 flask
 flask-cors
-pydub
