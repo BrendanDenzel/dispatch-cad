@@ -5,9 +5,6 @@ from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
-import sys
-import functools
-print = functools.partial(print, flush=True)
 
 clients = []
 
@@ -19,7 +16,8 @@ CHUNK_SECONDS = 30
 MAX_INCIDENTS = 500
 AUDIO_BUCKET  = "audio-clips"
 
-EASTERN  = ZoneInfo("America/New_York")
+EASTERN = ZoneInfo("America/New_York")
+
 groq_client = Groq(api_key=GROQ_API_KEY)
 supabase    = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -124,24 +122,15 @@ def get_stats():
 
 def capture_chunk():
     try:
-        resp = requests.get(STREAM_URL, stream=True, timeout=(10, 40))
-
-        # Flush ~3MB to skip stream backfill buffer and get close to live
-        flushed = 0
-        for chunk in resp.iter_content(chunk_size=4096):
-            flushed += len(chunk)
-            if flushed >= 3 * 1024 * 1024:
-                break
-
-        # Now capture CHUNK_SECONDS worth
-        buf, bytes_read = io.BytesIO(), 0
+        resp = requests.get(STREAM_URL, stream=True, timeout=(10, 45))
+        buf  = io.BytesIO()
+        bytes_read = 0
         target = 16000 * CHUNK_SECONDS
         for chunk in resp.iter_content(chunk_size=4096):
             buf.write(chunk)
             bytes_read += len(chunk)
             if bytes_read >= target:
                 break
-
         resp.close()
         return buf.getvalue()
     except Exception as e:
@@ -168,7 +157,7 @@ def trim_silence(audio_bytes: bytes) -> bytes:
         os.unlink(in_path)
 
         if result.returncode != 0 or not os.path.exists(out_path):
-            print(f"ffmpeg failed, using original audio", flush=True)
+            print("ffmpeg failed, using original audio", flush=True)
             return audio_bytes
 
         with open(out_path, "rb") as f:
@@ -176,7 +165,7 @@ def trim_silence(audio_bytes: bytes) -> bytes:
         os.unlink(out_path)
 
         if len(trimmed) < 1000:
-            print("Trimmed result too small — pure silence, skipping", flush=True)
+            print("Trim: pure silence detected, skipping", flush=True)
             return b""
 
         print(f"Trim: {len(audio_bytes)//1024}KB → {len(trimmed)//1024}KB", flush=True)
@@ -189,13 +178,14 @@ def trim_silence(audio_bytes: bytes) -> bytes:
 
 def upload_audio(audio_bytes: bytes) -> str | None:
     try:
-        path = f"clips/clip_{datetime.now(EASTERN).strftime('%Y%m%d_%H%M%S')}.mp3"
+        ts   = datetime.now(EASTERN).strftime("%Y%m%d_%H%M%S")
+        path = f"clips/clip_{ts}.mp3"
         supabase.storage.from_(AUDIO_BUCKET).upload(
             path, audio_bytes, {"content-type": "audio/mpeg", "upsert": "false"}
         )
         return f"{SUPABASE_URL}/storage/v1/object/public/{AUDIO_BUCKET}/{path}"
     except Exception as e:
-        print(f"Upload error: {e}", flush=True)
+        print(f"Audio upload error: {e}", flush=True)
         return None
 
 
@@ -205,7 +195,7 @@ def delete_audio(audio_url: str):
         if marker in audio_url:
             supabase.storage.from_(AUDIO_BUCKET).remove([audio_url.split(marker, 1)[1]])
     except Exception as e:
-        print(f"Delete audio error: {e}", flush=True)
+        print(f"Audio delete error: {e}", flush=True)
 
 
 def transcribe(audio_bytes: bytes) -> str:
@@ -351,13 +341,9 @@ def scanner_loop():
             time.sleep(10)
 
 
-def delayed_start():
-    time.sleep(15)
-    scanner_loop()
-
-thread = threading.Thread(target=delayed_start, daemon=True)
+thread = threading.Thread(target=scanner_loop, daemon=True)
 thread.start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, threaded=True)
