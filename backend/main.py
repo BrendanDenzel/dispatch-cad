@@ -1,4 +1,4 @@
-import os, io, time, requests, threading, tempfile, json, subprocess, concurrent.futures
+import os, io, time, requests, threading, tempfile, json, subprocess
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, request, Response
@@ -12,7 +12,7 @@ GROQ_API_KEY  = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL  = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY  = os.environ.get("SUPABASE_KEY")
 STREAM_URL    = os.environ.get("STREAM_URL")
-CHUNK_SECONDS = 15
+CHUNK_SECONDS = 30
 MAX_INCIDENTS = 500
 AUDIO_BUCKET  = "audio-clips"
 
@@ -125,16 +125,7 @@ def get_stats():
 def capture_chunk():
     try:
         resp = requests.get(STREAM_URL, stream=True, timeout=(10, 45))
-
-        # Flush ~3MB backfill buffer to get close to live
-        flushed = 0
-        for chunk in resp.iter_content(chunk_size=4096):
-            flushed += len(chunk)
-            if flushed >= 3 * 1024 * 1024:
-                break
-
-        # Now capture CHUNK_SECONDS of live audio
-        buf = io.BytesIO()
+        buf  = io.BytesIO()
         bytes_read = 0
         target = 16000 * CHUNK_SECONDS
         for chunk in resp.iter_content(chunk_size=4096):
@@ -142,7 +133,6 @@ def capture_chunk():
             bytes_read += len(chunk)
             if bytes_read >= target:
                 break
-
         resp.close()
         return buf.getvalue()
     except Exception as e:
@@ -160,8 +150,8 @@ def trim_silence(audio_bytes: bytes) -> bytes:
         result = subprocess.run([
             "ffmpeg", "-y", "-i", in_path,
             "-af",
-            "silenceremove=start_periods=1:start_silence=0.5:start_threshold=-35dB"
-            ":stop_periods=-1:stop_silence=0.5:stop_threshold=-35dB",
+            "silenceremove=start_periods=1:start_silence=0.5:start_threshold=-40dB"
+            ":stop_periods=-1:stop_silence=0.5:stop_threshold=-40dB",
             "-b:a", "64k",
             out_path
         ], capture_output=True, timeout=30)
@@ -327,17 +317,14 @@ def scanner_loop():
                 print("Pure silence, skipping.", flush=True)
                 continue
 
-            # Upload and transcribe in parallel to save time
-            print("Uploading + transcribing in parallel...", flush=True)
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
-                upload_future     = ex.submit(upload_audio, trimmed)
-                transcribe_future = ex.submit(transcribe, trimmed)
-                audio_url  = upload_future.result()
-                transcript = transcribe_future.result()
+            print("Uploading audio...", flush=True)
+            audio_url = upload_audio(trimmed)
 
+            print("Transcribing...", flush=True)
+            transcript = transcribe(trimmed)
             print(f"Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
 
-            if len(transcript) < 20:
+            if len(transcript) < 15:
                 print("Too short, skipping.", flush=True)
                 if audio_url:
                     delete_audio(audio_url)
