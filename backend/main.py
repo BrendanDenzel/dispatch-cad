@@ -104,6 +104,12 @@ def get_stats():
         now_et = datetime.now(EASTERN)
         today_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start.astimezone(ZoneInfo("UTC")).isoformat()
+        # Add this query inside get_stats()
+        all_time_res = (supabase.table("incidents")
+                .select("id", count="exact")
+                .execute())
+        all_time = all_time_res.count or 0
+
 
         # Count all today's incidents
         total_res = (supabase.table("incidents")
@@ -150,6 +156,9 @@ def get_stats():
             types[t] = types.get(t, 0) + 1
 
         return jsonify({
+            "total": total,
+            "all_time": all_time,   # ← add this
+            "high": high,
             "total": total,
             "high": high,
             "units": len(all_units),
