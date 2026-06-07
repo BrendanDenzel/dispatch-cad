@@ -103,15 +103,24 @@ def save_incident(parsed, transcript):
     try:
         row = {
             "incident_type": parsed.get("incident_type", "Unknown"),
-            "location":      parsed.get("location", "Unknown"),
-            "units":         parsed.get("units", []),
-            "priority":      parsed.get("priority", "Unknown"),
-            "notes":         parsed.get("notes", ""),
-            "transcript":    transcript,
-            "time_str":      datetime.now(EASTERN).strftime("%I:%M %p")
+            "location": parsed.get("location", "Unknown"),
+            "units": parsed.get("units", []),
+            "priority": parsed.get("priority", "Unknown"),
+            "notes": parsed.get("notes", ""),
+            "transcript": transcript,
+            "time_str": datetime.now(EASTERN).strftime("%I:%M %p")
         }
-        supabase.table("incidents").insert(row).execute()
-        print(f"Saved: {row['incident_type']} @ {row['location']}")
+
+        res = supabase.table("incidents").insert(row).execute()
+
+        saved = res.data[0] if res.data else row
+
+        # 🔥 PUSH TO ALL SSE CLIENTS
+        for q in clients:
+            q.append(saved)
+
+        print(f"Saved + broadcasted: {row['incident_type']}")
+
     except Exception as e:
         print(f"Save error: {e}")
 
@@ -140,39 +149,27 @@ def scanner_loop():
             print(f"Loop error: {e}")
             time.sleep(10)
 
+@app.route("/stream")
+def stream():
+    def event_stream():
+        clients.append(queue := [])
+
+        try:
+            while True:
+                if queue:
+                    data = queue.pop(0)
+                    yield f"data: {json.dumps(data)}\n\n"
+                time.sleep(0.1)
+        except GeneratorExit:
+            clients.remove(queue)
+
+    return Response(event_stream(), mimetype="text/event-stream")
+
 if __name__ == "__main__":
     thread = threading.Thread(target=scanner_loop, daemon=True)
     thread.start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-@app.route("/stream")
-def stream():
-    def event_stream():
-        last_id = None
-
-        while True:
-            try:
-                # fetch latest incident only
-                res = supabase.table("incidents") \
-                    .select("*") \
-                    .order("created_at", desc=True) \
-                    .limit(1) \
-                    .execute()
-
-                if res.data:
-                    latest = res.data[0]
-
-                    if latest["id"] != last_id:
-                        last_id = latest["id"]
-                        yield f"data: {json.dumps(latest)}\n\n"
-
-                time.sleep(2)
-
-            except Exception as e:
-                print("SSE error:", e)
-                time.sleep(5)
-
-    return Response(event_stream(), mimetype="text/event-stream")
 
 @app.after_request
 def add_headers(response):
