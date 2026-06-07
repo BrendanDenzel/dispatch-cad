@@ -21,6 +21,7 @@ AUDIO_BUCKET  = "audio-clips"
 EASTERN = ZoneInfo("America/New_York")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
+
 def get_supabase():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -66,62 +67,23 @@ def add_headers(response):
     response.headers["X-Accel-Buffering"] = "no"
     return response
 
-# ─────────────────────────────────────────────
-# Scanner helpers
-# ─────────────────────────────────────────────
-
-def capture_chunk():
-    try:
-        resp = requests.get(STREAM_URL, stream=True, timeout=10)
-        
-        # Flush the backfill buffer first (~3MB gets you close to live)
-        flushed = 0
-        flush_target = 3 * 1024 * 1024  # 3MB
-        for chunk in resp.iter_content(chunk_size=4096):
-            flushed += len(chunk)
-            if flushed >= flush_target:
-                break
-
-        # Now capture from closer to live position
-        buf = io.BytesIO()
-        bytes_read = 0
-        target = 16000 * CHUNK_SECONDS
-        for chunk in resp.iter_content(chunk_size=4096):
-            buf.write(chunk)
-            bytes_read += len(chunk)
-            if bytes_read >= target:
-                break
-
-        resp.close()
-        return buf.getvalue()
-    except Exception as e:
-        print(f"Capture error: {e}")
-        return None
-
-
 @app.route("/stats")
 def get_stats():
     db = get_supabase()
     try:
-        # Get today's date range in Eastern Time
         now_et = datetime.now(EASTERN)
         today_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start.astimezone(ZoneInfo("UTC")).isoformat()
-        # Add this query inside get_stats()
-        all_time_res = (db.table("incidents")
-                .select("id", count="exact")
-                .execute())
+
+        all_time_res = db.table("incidents").select("id", count="exact").execute()
         all_time = all_time_res.count or 0
 
-
-        # Count all today's incidents
         total_res = (db.table("incidents")
                      .select("id", count="exact")
                      .gte("created_at", today_start_utc)
                      .execute())
         total = total_res.count or 0
 
-        # Count high priority
         high_res = (db.table("incidents")
                     .select("id", count="exact")
                     .gte("created_at", today_start_utc)
@@ -129,7 +91,6 @@ def get_stats():
                     .execute())
         high = high_res.count or 0
 
-        # Get units and last call from today's incidents (lightweight, no transcript)
         detail_res = (db.table("incidents")
                       .select("units, time_str, created_at, incident_type")
                       .gte("created_at", today_start_utc)
@@ -144,7 +105,6 @@ def get_stats():
 
         last_call = rows[0]["time_str"] if rows else "—"
 
-        # Calls per hour
         rate = "0"
         if len(rows) > 1:
             newest = datetime.fromisoformat(rows[0]["created_at"])
@@ -152,7 +112,6 @@ def get_stats():
             hrs = max((newest - oldest).total_seconds() / 3600, 0.1)
             rate = f"{len(rows) / hrs:.1f}"
 
-        # Breakdown by type
         types = {}
         for r in rows:
             t = r.get("incident_type") or "Unknown"
@@ -160,9 +119,7 @@ def get_stats():
 
         return jsonify({
             "total": total,
-            "all_time": all_time,   # ← add this
-            "high": high,
-            "total": total,
+            "all_time": all_time,
             "high": high,
             "units": len(all_units),
             "last_call": last_call,
@@ -170,13 +127,41 @@ def get_stats():
             "breakdown": types
         })
     except Exception as e:
-        print(f"Stats error: {e}")
-        return jsonify({"total":0,"high":0,"units":0,"last_call":"—","rate":"0","breakdown":{}})
+        print(f"Stats error: {e}", flush=True)
+        return jsonify({"total": 0, "all_time": 0, "high": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
 
+# ─────────────────────────────────────────────
+# Scanner helpers
+# ─────────────────────────────────────────────
+
+def capture_chunk():
+    try:
+        resp = requests.get(STREAM_URL, stream=True, timeout=10)
+
+        flushed = 0
+        flush_target = 3 * 1024 * 1024
+        for chunk in resp.iter_content(chunk_size=4096):
+            flushed += len(chunk)
+            if flushed >= flush_target:
+                break
+
+        buf = io.BytesIO()
+        bytes_read = 0
+        target = 16000 * CHUNK_SECONDS
+        for chunk in resp.iter_content(chunk_size=4096):
+            buf.write(chunk)
+            bytes_read += len(chunk)
+            if bytes_read >= target:
+                break
+
+        resp.close()
+        return buf.getvalue()
+    except Exception as e:
+        print(f"Capture error: {e}", flush=True)
+        return None
 
 
 def trim_silence(audio_bytes: bytes) -> bytes:
-    """Use ffmpeg silenceremove filter to strip leading/trailing silence."""
     try:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as fin:
             fin.write(audio_bytes)
@@ -196,7 +181,7 @@ def trim_silence(audio_bytes: bytes) -> bytes:
         os.unlink(in_path)
 
         if result.returncode != 0 or not os.path.exists(out_path):
-            print("ffmpeg trim failed, using original")
+            print(f"ffmpeg trim failed (rc={result.returncode}), using original", flush=True)
             return audio_bytes
 
         with open(out_path, "rb") as f:
@@ -204,18 +189,15 @@ def trim_silence(audio_bytes: bytes) -> bytes:
         os.unlink(out_path)
 
         if len(trimmed) < 1000:
-            print("Trim: result too small, likely pure silence")
+            print("Trim: result too small, likely pure silence", flush=True)
             return b""
 
-        original_kb = len(audio_bytes) // 1024
-        trimmed_kb  = len(trimmed) // 1024
-        print(f"Trim: {original_kb}KB → {trimmed_kb}KB")
+        print(f"Trim: {len(audio_bytes)//1024}KB → {len(trimmed)//1024}KB", flush=True)
         return trimmed
 
     except Exception as e:
-        print(f"Trim error: {e}")
+        print(f"Trim error: {e}", flush=True)
         return audio_bytes
-
 
 
 def upload_audio(audio_bytes: bytes) -> str | None:
@@ -231,12 +213,11 @@ def upload_audio(audio_bytes: bytes) -> str | None:
         )
         return f"{SUPABASE_URL}/storage/v1/object/public/{AUDIO_BUCKET}/{path}"
     except Exception as e:
-        print(f"Audio upload error: {e}")
+        print(f"Audio upload error: {e}", flush=True)
         return None
 
 
 def delete_audio(audio_url: str):
-    """Helper to remove a clip from storage given its public URL."""
     try:
         marker = f"/public/{AUDIO_BUCKET}/"
         if marker in audio_url:
@@ -244,7 +225,7 @@ def delete_audio(audio_url: str):
             db = get_supabase()
             db.storage.from_(AUDIO_BUCKET).remove([clip_path])
     except Exception as e:
-        print(f"Audio delete error: {e}")
+        print(f"Audio delete error: {e}", flush=True)
 
 
 def transcribe(audio_bytes: bytes) -> str:
@@ -261,7 +242,7 @@ def transcribe(audio_bytes: bytes) -> str:
         os.unlink(tmp_path)
         return result.strip() if result else ""
     except Exception as e:
-        print(f"Transcription error: {e}")
+        print(f"Transcription error: {e}", flush=True)
         return ""
 
 
@@ -296,16 +277,14 @@ def parse_transcript(transcript: str):
         text = text.replace("```json", "").replace("```", "").strip()
         return json.loads(text)
     except Exception as e:
-        print(f"Parse error: {e}")
+        print(f"Parse error: {e}", flush=True)
         return None
 
 
 def purge_old_incidents():
     db = get_supabase()
     try:
-        count_res = (db.table("incidents")
-                     .select("id", count="exact")
-                     .execute())
+        count_res = db.table("incidents").select("id", count="exact").execute()
         total = count_res.count or 0
         if total <= MAX_INCIDENTS:
             return
@@ -319,9 +298,9 @@ def purge_old_incidents():
             if row.get("audio_url"):
                 delete_audio(row["audio_url"])
             db.table("incidents").delete().eq("id", row["id"]).execute()
-            print(f"Purged old incident id={row['id']}")
+            print(f"Purged old incident id={row['id']}", flush=True)
     except Exception as e:
-        print(f"Purge error: {e}")
+        print(f"Purge error: {e}", flush=True)
 
 
 def save_incident(parsed: dict, transcript: str, audio_url: str | None):
@@ -341,14 +320,14 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
         saved = res.data[0] if res.data else row
         for q in clients:
             q.append(saved)
-        print(f"Saved + broadcasted: {row['incident_type']}")
+        print(f"Saved + broadcasted: {row['incident_type']}", flush=True)
         purge_old_incidents()
     except Exception as e:
-        print(f"Save error: {e}")
+        print(f"Save error: {e}", flush=True)
 
 
 # ─────────────────────────────────────────────
-# Main scanner loop
+# Scanner loop
 # ─────────────────────────────────────────────
 
 def scanner_loop():
@@ -401,8 +380,27 @@ def scanner_loop():
             time.sleep(10)
 
 
-thread = threading.Thread(target=scanner_loop, daemon=True)
-thread.start()
+# ─────────────────────────────────────────────
+# Thread startup — works with both gunicorn and
+# direct `python app.py`. The os.getpid() guard
+# ensures only ONE worker starts the scanner
+# (prevents duplicate loops when gunicorn forks).
+# ─────────────────────────────────────────────
+
+_scanner_started = False
+
+def start_scanner():
+    global _scanner_started
+    if _scanner_started:
+        return
+    _scanner_started = True
+    print(f"Starting scanner thread in PID {os.getpid()}...", flush=True)
+    t = threading.Thread(target=scanner_loop, daemon=True)
+    t.start()
+
+# Start immediately at import time — gunicorn imports this module
+# in each worker, so this runs in the worker process (not pre-fork).
+start_scanner()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
