@@ -386,7 +386,6 @@ def scanner_loop():
 # (prevents duplicate loops when gunicorn forks).
 # ─────────────────────────────────────────────
 
-# Start scanner thread
 _t = threading.Thread(target=scanner_loop, daemon=True)
 _t.start()
 
