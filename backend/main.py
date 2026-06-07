@@ -386,6 +386,10 @@ def scanner_loop():
 # (prevents duplicate loops when gunicorn forks).
 # ─────────────────────────────────────────────
 
+# Start scanner thread
+_t = threading.Thread(target=scanner_loop, daemon=True)
+_t.start()
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
