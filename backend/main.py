@@ -241,7 +241,8 @@ def delete_audio(audio_url: str):
         marker = f"/public/{AUDIO_BUCKET}/"
         if marker in audio_url:
             clip_path = audio_url.split(marker, 1)[1]
-            supabase.storage.from_(AUDIO_BUCKET).remove([clip_path])
+            db = get_supabase()
+            db.storage.from_(AUDIO_BUCKET).remove([clip_path])
     except Exception as e:
         print(f"Audio delete error: {e}")
 
