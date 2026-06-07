@@ -1,9 +1,9 @@
 import os
 
 workers = 1
-worker_class = "sync"
+worker_class = "gevent"
+worker_connections = 100
 timeout = 120
-bind = f"0.0.0.0:{os.environ.get('PORT', '10000')}"
 
 def post_fork(server, worker):
     import threading
