@@ -17,10 +17,7 @@
   --text:#dde2ea;--text2:#8892a0;--text3:#4a5568;
   --mono:'JetBrains Mono',monospace;--sans:'Inter',sans-serif;
 }
-html,body{height: 100%;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;}
+html,body{height:100%;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:13px;}
 .topbar{height:48px;background:var(--panel);border-bottom:2px solid var(--blue);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;z-index:50;}
 .tb-shield{width:28px;height:28px;background:var(--blue);border-radius:3px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .tb-shield svg{width:15px;height:15px;fill:white;}
@@ -85,18 +82,12 @@ audio{display:none;}
 .pri-tag.low{background:var(--green-dim);color:var(--green-bright);border-color:rgba(39,174,96,.2);}
 .pri-tag.unknown{background:rgba(74,85,104,.15);color:var(--text3);border-color:var(--border);}
 .unit-chip{font-family:var(--mono);font-size:9px;padding:2px 6px;background:var(--blue-dim);border:1px solid rgba(45,125,210,.2);color:var(--blue-bright);border-radius:2px;}
+/* audio icon badge on row */
+.audio-badge{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:9px;padding:2px 6px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);color:var(--green-bright);border-radius:2px;}
+.audio-badge svg{width:9px;height:9px;fill:currentColor;}
 .irow-notes{font-size:11px;color:var(--text2);margin-top:4px;line-height:1.4;}
 .irow-arr{padding:10px 10px 10px 0;display:flex;align-items:center;color:var(--text3);font-size:12px;}
-.side{
-  width:290px;
-  flex-shrink:0;
-  display:flex;
-  flex-direction:column;
-  border-left:1px solid var(--border);
-  background:var(--panel);
-  height:100%;
-  min-height:0;
-}
+.side{width:290px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid var(--border);background:var(--panel);height:100%;min-height:0;}
 .tx-feed{flex:1;overflow-y:auto;min-height:0;}.tx-feed::-webkit-scrollbar{width:3px;}.tx-feed::-webkit-scrollbar-thumb{background:var(--border2);}
 .tx-entry{padding:8px 12px;border-bottom:1px solid var(--border);animation:fadeUp .35s ease-out;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
@@ -123,7 +114,7 @@ audio{display:none;}
 .toast-type{font-size:12px;font-weight:600;color:#fff;}
 .toast-loc{font-family:var(--mono);font-size:10px;color:var(--text2);}
 
-/* ── MODAL ── */
+/* MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:8000;align-items:center;justify-content:center;padding:16px;}
 .modal-overlay.open{display:flex;}
 .modal{background:var(--panel);border:1px solid var(--border2);border-radius:4px;width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column;animation:modalIn .2s ease-out;overflow:hidden;}
@@ -154,24 +145,55 @@ audio{display:none;}
 .m-id{font-family:var(--mono);font-size:10px;color:var(--text3);}
 .m-pri{display:inline-flex;align-items:center;gap:6px;}
 .m-pri-dot{width:8px;height:8px;border-radius:50%;}
-
-/* Location link + map */
-.loc-link{
-  color:var(--blue-bright);text-decoration:none;font-family:var(--mono);font-size:11px;
-  display:inline-flex;align-items:center;gap:5px;cursor:pointer;
-  border-bottom:1px solid rgba(74,158,255,.3);padding-bottom:1px;transition:border-color .15s;
-}
+.loc-link{color:var(--blue-bright);text-decoration:none;font-family:var(--mono);font-size:11px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;border-bottom:1px solid rgba(74,158,255,.3);padding-bottom:1px;transition:border-color .15s;}
 .loc-link:hover{border-color:var(--blue-bright);}
 .loc-link svg{width:11px;height:11px;fill:currentColor;opacity:.7;flex-shrink:0;}
 .map-container{margin-top:8px;border:1px solid var(--border2);border-radius:3px;overflow:hidden;height:200px;background:var(--panel3);display:none;}
 .map-container.visible{display:block;}
 .map-container iframe{width:100%;height:100%;border:none;display:block;}
 .map-toggle-hint{font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:6px;opacity:.6;}
-
-/* Transcript lines in modal */
 .m-tx-box{background:var(--panel2);border:1px solid var(--border2);border-radius:3px;padding:10px 12px;}
 .m-tx-line{font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.65;display:block;padding:2px 0;}
 .m-tx-line+.m-tx-line{border-top:1px solid rgba(255,255,255,.05);margin-top:4px;padding-top:6px;}
+
+/* ── Audio Player ── */
+.audio-player{
+  background:var(--panel2);
+  border:1px solid var(--border2);
+  border-radius:3px;
+  padding:10px 14px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.audio-player-row{display:flex;align-items:center;gap:10px;}
+.ap-play{
+  width:32px;height:32px;border-radius:50%;
+  background:var(--blue);border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:background .15s;
+}
+.ap-play:hover{background:var(--blue-bright);}
+.ap-play svg{width:13px;height:13px;fill:white;margin-left:2px;}
+.ap-play.playing svg{margin-left:0;}
+.ap-progress-wrap{flex:1;display:flex;flex-direction:column;gap:4px;}
+.ap-bar-track{height:4px;background:var(--border2);border-radius:2px;cursor:pointer;position:relative;}
+.ap-bar-fill{height:100%;background:var(--blue);border-radius:2px;width:0%;transition:width .1s linear;}
+.ap-times{display:flex;justify-content:space-between;}
+.ap-time{font-family:var(--mono);font-size:9px;color:var(--text3);}
+.ap-vol{display:flex;align-items:center;gap:6px;}
+.ap-vol svg{width:12px;height:12px;fill:var(--text3);flex-shrink:0;}
+.ap-vol-slider{-webkit-appearance:none;appearance:none;width:70px;height:3px;background:var(--border2);border-radius:2px;outline:none;cursor:pointer;}
+.ap-vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--blue-bright);cursor:pointer;}
+.ap-label{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.5px;text-transform:uppercase;}
+.ap-no-audio{font-family:var(--mono);font-size:11px;color:var(--text3);padding:8px 0;display:flex;align-items:center;gap:6px;}
+.ap-no-audio svg{width:14px;height:14px;stroke:var(--text3);fill:none;stroke-width:1.5;}
+
+/* Decoded term tooltip */
+.decoded{color:var(--blue-bright);border-bottom:1px solid rgba(74,158,255,.5);cursor:pointer;position:relative;display:inline;font-family:var(--mono);}
+.decoded:hover .decoded-tip{display:block;}
+.decoded-tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a1f2a;border:1px solid var(--border2);border-radius:3px;padding:4px 8px;white-space:nowrap;font-size:10px;color:var(--text2);font-family:var(--mono);z-index:100;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.4);}
+.decoded-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1a1f2a;}
 
 /* Mobile */
 .mob-nav{display:none;border-top:1px solid var(--border);background:var(--panel);flex-shrink:0;}
@@ -216,7 +238,7 @@ audio{display:none;}
   <div class="sb-viz" id="sb-viz"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
   <span class="sb-onair" id="sb-onair">ON AIR</span>
   <button class="sb-btn" id="sb-btn" onclick="toggleAudio()">▶ Monitor</button>
-  <audio id="scanner-audio"><source src="https://broadcastify.cdnstream1.com/40857" type="audio/mpeg"></audio>
+  <audio id="scanner-audio"><source src="https://live-stream-mic-test.onrender.com/stream.mp3" type="audio/mpeg"></audio>
 </div>
 
 <div class="stats">
@@ -236,12 +258,8 @@ audio{display:none;}
   </div>
   <div class="side" id="view-side">
     <div class="col-hdr"><span class="col-hdr-title">Radio Log</span></div>
-    <div class="bkdn">
-  <div class="bkdn-ttl">Incident Types</div>
-  <div id="breakdown-list"></div>
-</div>
-
-<div class="tx-feed" id="transcript-feed">
+    <div class="bkdn"><div class="bkdn-ttl">Incident Types</div><div id="breakdown-list"></div></div>
+    <div class="tx-feed" id="transcript-feed"></div>
   </div>
 </div>
 
@@ -258,7 +276,6 @@ audio{display:none;}
   </div>
 </div>
 
-<!-- MODAL -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
   <div class="modal" id="modal">
     <div class="modal-hdr">
@@ -273,214 +290,445 @@ audio{display:none;}
 </div>
 
 <script>
-const API='https://dispatch-cad.onrender.com/incidents';
-let knownIds=new Set(),allIncidents=[],incidentMap={};
+const API = 'https://dispatch-cad.onrender.com/incidents';
 
-function updateClock(){
-  const n=new Date();
-  document.getElementById('clock').textContent=n.toLocaleTimeString('en-US',{hour12:false});
-  document.getElementById('dateline').textContent=n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
+// ── State ──────────────────────────────────────────────────────────────────
+let knownIds    = new Set();
+let allIncidents = [];
+let incidentMap  = {};
+let currentOffset = 0;
+let allLoaded   = false;
+let isLoading   = false;
+
+// Stats are derived ONLY from incidents that are "today" in ET.
+// We compute "today in ET" once per updateStats call so it's always accurate.
+function getTodayET() {
+  return new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 }
-setInterval(updateClock,1000);updateClock();
+function isToday(inc) {
+  if (!inc.created_at) return false;
+  return new Date(inc.created_at)
+    .toLocaleDateString('en-US', { timeZone: 'America/New_York' }) === getTodayET();
+}
 
-function toggleAudio(){
-  const a=document.getElementById('scanner-audio');
-  const btn=document.getElementById('sb-btn');
-  const viz=document.getElementById('sb-viz');
-  const oa=document.getElementById('sb-onair');
-  if(a.paused){
+// ── 10-Code table ──────────────────────────────────────────────────────────
+const TEN_CODES = {
+  '10-0':'Use Caution','10-1':'Signal Weak','10-2':'Signal Good','10-3':'Stop Transmitting',
+  '10-4':'Acknowledged','10-5':'Relay Message','10-6':'Busy','10-7':'Out of Service',
+  '10-8':'In Service','10-9':'Repeat','10-10':'Fight in Progress','10-11':'Dog Case',
+  '10-12':'Stand By','10-13':'Weather/Road Report','10-14':'Prowler Report',
+  '10-15':'Civil Disturbance','10-16':'Domestic Problem','10-17':'Meet Complainant',
+  '10-18':'Complete Assignment Quickly','10-19':'Return to Station','10-20':'Location',
+  '10-21':'Call by Phone','10-22':'Disregard','10-23':'Arrived at Scene',
+  '10-24':'Assignment Completed','10-25':'Report to Station','10-26':'Detaining Suspect',
+  '10-27':'License Check','10-28':'Vehicle Registration','10-29':'Check for Wanted',
+  '10-30':'Unnecessary Use of Radio','10-31':'Crime in Progress','10-32':'Man with Gun',
+  '10-33':'Emergency','10-34':'Riot','10-35':'Major Crime Alert','10-36':'Correct Time',
+  '10-37':'Suspicious Vehicle','10-38':'Stopping Suspicious Vehicle','10-39':'Urgent — Use Lights/Siren',
+  '10-40':'Silent Run','10-41':'Beginning Tour of Duty','10-42':'Ending Tour of Duty',
+  '10-43':'Information','10-44':'Permission to Leave','10-45':'Animal Carcass',
+  '10-46':'Assist Motorist','10-47':'Emergency Road Repair','10-48':'Traffic Standard Repair',
+  '10-49':'Traffic Light Out','10-50':'Accident','10-51':'Wrecker Needed',
+  '10-52':'Ambulance Needed','10-53':'Road Blocked','10-54':'Livestock on Highway',
+  '10-55':'Intoxicated Driver','10-56':'Intoxicated Pedestrian','10-57':'Hit and Run',
+  '10-58':'Direct Traffic','10-59':'Escort','10-60':'Squad in Vicinity',
+  '10-61':'Personnel in Area','10-62':'Reply to Message','10-63':'Prepare to Copy',
+  '10-64':'Local Message','10-65':'Net Message Assignment','10-66':'Message Cancellation',
+  '10-67':'Clear to Read Net','10-68':'Dispatch Info','10-69':'Message Received',
+  '10-70':'Fire','10-71':'Advise Nature of Fire','10-72':'Report Progress on Fire',
+  '10-73':'Smoke Report','10-74':'Negative','10-75':'Engaged','10-76':'En Route',
+  '10-77':'ETA','10-78':'Need Assistance','10-79':'Notify Coroner','10-80':'Chase in Progress',
+  '10-81':'Breathalyzer','10-82':'Reserve Lodging','10-83':'Work School Crossing',
+  '10-84':'Advise Phone Number','10-85':'Delayed','10-86':'Officer on Duty',
+  '10-87':'Pick Up Checks','10-88':'Advise Telephone Number','10-89':'Bomb Threat',
+  '10-90':'Bank Alarm','10-91':'Unnecessary Use of Radio','10-92':'Improperly Parked Vehicle',
+  '10-93':'Blockade','10-94':'Drag Racing','10-95':'Prisoner in Custody',
+  '10-96':'Mental Subject','10-97':'Check Signal','10-98':'Prison Break',
+  '10-99':'Records Check','10-100':'Misdemeanor Warrant'
+};
+const TEN_WORDS = {
+  'ten zero':'10-0','ten one':'10-1','ten two':'10-2','ten three':'10-3','ten four':'10-4',
+  'ten five':'10-5','ten six':'10-6','ten seven':'10-7','ten eight':'10-8','ten nine':'10-9',
+  'ten ten':'10-10','ten eleven':'10-11','ten twelve':'10-12','ten thirteen':'10-13',
+  'ten fourteen':'10-14','ten fifteen':'10-15','ten sixteen':'10-16','ten seventeen':'10-17',
+  'ten eighteen':'10-18','ten nineteen':'10-19','ten twenty':'10-20','ten twenty one':'10-21',
+  'ten twenty two':'10-22','ten twenty three':'10-23','ten twenty four':'10-24',
+  'ten twenty five':'10-25','ten twenty six':'10-26','ten twenty seven':'10-27',
+  'ten twenty eight':'10-28','ten twenty nine':'10-29','ten thirty':'10-30',
+  'ten thirty one':'10-31','ten thirty two':'10-32','ten thirty three':'10-33',
+  'ten thirty four':'10-34','ten thirty five':'10-35','ten forty':'10-40',
+  'ten forty four':'10-44','ten fifty':'10-50','ten fifty five':'10-55','ten seventy':'10-70',
+  'ten seventy six':'10-76','ten seventy eight':'10-78','ten eighty':'10-80',
+  'ten ninety six':'10-96','ten ninety nine':'10-99'
+};
+const PHONETIC = {
+  'alpha':'A','bravo':'B','charlie':'C','delta':'D','echo':'E','edward':'E','foxtrot':'F','frank':'F','fleming':'F',
+  'golf':'G','george':'G','hotel':'H','india':'I','ida':'I','juliet':'J','kilo':'K',
+  'lima':'L','lincoln':'L','mike':'M','michael':'M', 'mary':'M', 'marry':'M', 'november':'N', 'nora':'N','oscar':'O','papa':'P',
+  'paul':'P','quebec':'Q','romeo':'R','robert':'R','richard':'R','sierra':'S','sam':'S','tango':'T','uniform':'U',
+  'victor':'V','whiskey':'W','x-ray':'X','xray':'X','yankee':'Y','zulu':'Z','zebra':'Z'
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function decodeRadioText(text) {
+  if (!text) return '';
+  const words = text.split(/(\s+)/);
+  let tokens = [], skipNext = 0;
+  for (let wi = 0; wi < words.length; wi++) {
+    if (skipNext > 0) { skipNext--; continue; }
+    const word = words[wi];
+    if (/^\s+$/.test(word)) { tokens.push({ type:'space', val:word }); continue; }
+    const m = word.match(/^(.*?)([.,!?;:]*)$/);
+    const core = m ? m[1] : word, punct = m ? m[2] : '';
+    const coreLower = core.toLowerCase();
+    let matched = false;
+    for (let len = 4; len >= 2; len--) {
+      const chunk = []; let j = wi;
+      while (chunk.length < len && j < words.length) {
+        if (!/^\s+$/.test(words[j])) chunk.push(words[j].replace(/[.,!?;:]*$/,'').toLowerCase());
+        j++;
+      }
+      if (chunk.length < len) continue;
+      const phrase = chunk.join(' ');
+      if (TEN_WORDS[phrase]) {
+        const code = TEN_WORDS[phrase];
+        tokens.push({ type:'tencode', val:code, original:phrase, punct:'' });
+        let consumed = 0, k = wi;
+        while (consumed < len && k < words.length) { if (!/^\s+$/.test(words[k])) consumed++; k++; }
+        skipNext = k - wi - 1; wi = k - 1; matched = true; break;
+      }
+    }
+    if (matched) continue;
+    const numCode = coreLower.match(/^(10)[-\s]?(\d{1,3})$/);
+    if (numCode) {
+      const code = '10-' + numCode[2];
+      if (TEN_CODES[code]) { tokens.push({ type:'tencode', val:code, original:core, punct }); continue; }
+    }
+    if (PHONETIC[coreLower]) { tokens.push({ type:'phonetic', val:PHONETIC[coreLower], original:core, punct }); continue; }
+    tokens.push({ type:'word', val:core + punct });
+  }
+  let result = '', i = 0;
+  while (i < tokens.length) {
+    const tok = tokens[i];
+    if (tok.type === 'phonetic') {
+      result += `<span class="decoded">${escHtml(tok.original)}<span class="decoded-tip">Phonetic: ${escHtml(tok.val)}</span></span>${escHtml(tok.punct||'')}`;
+      i++; continue;
+    }
+    if (tok.type === 'tencode') {
+      const meaning = TEN_CODES[tok.val] || '';
+      result += `<span class="decoded">${escHtml(tok.val)}<span class="decoded-tip">Code: ${escHtml(meaning)}</span></span>${escHtml(tok.punct||'')}`;
+      i++; continue;
+    }
+    result += tok.type === 'space' ? escHtml(tok.val) : escHtml(tok.val);
+    i++;
+  }
+  return result;
+}
+
+function splitTranscript(text) {
+  if (!text || !text.trim()) return [text || ''];
+  const lines = text
+    .replace(/([.!?])\s+([A-Z])/g, '$1|||$2')
+    .replace(/,\s+(unit\s+\d|[A-Z]\d{2,})/gi, '|||$1')
+    .split('|||').map(s => s.trim()).filter(s => s.length > 3);
+  return lines.length > 0 ? lines : [text];
+}
+function renderTxBubble(text) {
+  return splitTranscript(text).map(l => `<span class="tx-line">${escHtml(l)}</span>`).join('');
+}
+function renderModalTx(text) {
+  return splitTranscript(text).map(l => `<span class="m-tx-line">${decodeRadioText(l)}</span>`).join('');
+}
+
+// ── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent = n.toLocaleTimeString('en-US',{hour12:false});
+  document.getElementById('dateline').textContent =
+    n.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── Scanner audio toggle ───────────────────────────────────────────────────
+function toggleAudio() {
+  const a = document.getElementById('scanner-audio');
+  const btn = document.getElementById('sb-btn');
+  const viz = document.getElementById('sb-viz');
+  const oa  = document.getElementById('sb-onair');
+  if (a.paused) {
     a.play().catch(()=>{});
-    btn.textContent='■ Stop';btn.classList.add('on');
-    viz.classList.add('active');oa.classList.add('active');
-  }else{
+    btn.textContent='■ Stop'; btn.classList.add('on');
+    viz.classList.add('active'); oa.classList.add('active');
+  } else {
     a.pause();
-    btn.textContent='▶ Monitor';btn.classList.remove('on');
-    viz.classList.remove('active');oa.classList.remove('active');
+    btn.textContent='▶ Monitor'; btn.classList.remove('on');
+    viz.classList.remove('active'); oa.classList.remove('active');
   }
 }
 
-function mobTab(tab){
-  const feed=document.getElementById('view-feed');
-  const side=document.getElementById('view-side');
-  const bi=document.getElementById('mnb-inc');
-  const br=document.getElementById('mnb-rad');
-  if(tab==='feed'){
-    feed.style.display='flex';side.classList.remove('mob-show');
-    bi.classList.add('active');br.classList.remove('active');
-  }else{
-    feed.style.display='none';side.classList.add('mob-show');
-    br.classList.add('active');bi.classList.remove('active');
+// ── Mobile tabs ────────────────────────────────────────────────────────────
+function mobTab(tab) {
+  const feed = document.getElementById('view-feed');
+  const side = document.getElementById('view-side');
+  const bi = document.getElementById('mnb-inc'), br = document.getElementById('mnb-rad');
+  if (tab === 'feed') {
+    feed.style.display='flex'; side.classList.remove('mob-show');
+    bi.classList.add('active'); br.classList.remove('active');
+  } else {
+    feed.style.display='none'; side.classList.add('mob-show');
+    br.classList.add('active'); bi.classList.remove('active');
   }
 }
 
-function pClass(p){return(p||'unknown').toLowerCase();}
+// Call this instead of deriving stats from the incident list
+async function fetchStats() {
+  try {
+    const res = await fetch('https://dispatch-cad.onrender.com/stats');
+    if (!res.ok) return;
+    const s = await res.json();
+    document.getElementById('stat-total').textContent = s.total;
+    document.getElementById('stat-high').textContent  = s.high;
+    document.getElementById('stat-units').textContent = s.units;
+    document.getElementById('stat-last').textContent  = s.last_call;
+    document.getElementById('stat-rate').textContent  = s.rate;
+    document.getElementById('incident-count').textContent = `${s.all_time} total · ${allIncidents.length} loaded`;
 
-function makeIncidentId(inc){
-  const ts=inc.created_at?new Date(inc.created_at).getTime():Date.now();
-  return 'INC-'+String(ts).slice(-6).toUpperCase();
+
+    // Breakdown
+    const types  = s.breakdown || {};
+    const sorted = Object.entries(types).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    const max    = sorted[0]?.[1] || 1;
+    document.getElementById('breakdown-list').innerHTML = sorted.map(([tp,ct]) => `
+      <div class="bkdn-row">
+        <div class="bkdn-lbl">${escHtml(tp)}</div>
+        <div class="bkdn-track"><div class="bkdn-fill" style="width:${ct/max*100}%"></div></div>
+        <div class="bkdn-n">${ct}</div>
+      </div>`).join('');
+  } catch(e) { console.error(e); }
 }
 
-/* Split transcript into sentence-based lines */
-function splitTranscript(text){
-  if(!text||text.trim().length===0) return [];
-  const lines=text
-    .replace(/([.!?])\s+([A-Z])/g,'$1|||$2')
-    .replace(/,\s+(unit\s+\d|[A-Z]\d{2,})/gi,'|||$1')
-    .split('|||')
-    .map(s=>s.trim())
-    .filter(s=>s.length>3);
-  return lines.length>0?lines:[text];
+
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(inc) {
+  const pc = pClass(inc.priority);
+  const t  = document.createElement('div');
+  t.className = `toast ${pc}`;
+  t.innerHTML = `<div class="toast-hd"><div class="toast-dot"></div><div class="toast-type">${escHtml(inc.incident_type||'Incident')}</div></div><div class="toast-loc">${escHtml(inc.location||'Unknown location')}</div>`;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 5000);
 }
 
-/* Render transcript bubble for side panel */
-function renderTxBubble(text){
-  const lines=splitTranscript(text);
-  return lines.map(l=>`<span class="tx-line">${l}</span>`).join('');
+// ── Connection indicator ───────────────────────────────────────────────────
+function setConn(on) {
+  document.getElementById('conn-dot').className = 'tb-pill-dot ' + (on ? 'on' : 'err');
+  document.getElementById('conn-label').textContent = on ? 'CONNECTED' : 'OFFLINE';
 }
 
-/* Render transcript lines for modal */
-function renderModalTx(text){
-  const lines=splitTranscript(text);
-  return lines.map(l=>`<span class="m-tx-line">${l}</span>`).join('');
+// ── Priority class ─────────────────────────────────────────────────────────
+function pClass(p) { return (p||'unknown').toLowerCase(); }
+
+// ── Incident ID ────────────────────────────────────────────────────────────
+function makeIncidentId(inc) {
+  const ts = inc.created_at ? new Date(inc.created_at).getTime() : Date.now();
+  return 'INC-' + String(ts).slice(-6).toUpperCase();
 }
 
-function renderRow(inc){
-  const pc=pClass(inc.priority);
-  const units=(inc.units||[]).map(u=>`<span class="unit-chip">${u}</span>`).join('');
-  const priLabel={high:'Priority 1',medium:'Priority 2',low:'Priority 3',unknown:'Unknown'}[pc]||inc.priority;
-  return `<div class="irow new-in" data-id="${inc.id}" onclick="openModal('${inc.id}')">
+// ── Render incident row ────────────────────────────────────────────────────
+function renderRow(inc) {
+  const pc = pClass(inc.priority);
+  const units = (inc.units||[]).map(u=>`<span class="unit-chip">${escHtml(u)}</span>`).join('');
+  const priLabel = {high:'Priority 1',medium:'Priority 2',low:'Priority 3',unknown:'Unknown'}[pc]||inc.priority;
+  const audioBadge = inc.audio_url
+    ? `<span class="audio-badge"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>Audio</span>`
+    : '';
+  return `<div class="irow new-in" data-id="${inc.id}" onclick="openModal(${inc.id})">
     <div class="irow-bar ${pc}"></div>
     <div class="irow-body">
-      <div class="irow-top">
-        <div class="irow-type">${inc.incident_type||'Unknown'}</div>
-        <div class="irow-time">${inc.time_str||''}</div>
-      </div>
-      <div class="irow-loc">
-        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-        ${inc.location||'Location Unknown'}
-      </div>
-      <div class="irow-foot">
-        <span class="pri-tag ${pc}">${priLabel}</span>
-        ${units}
-      </div>
-      ${inc.notes?`<div class="irow-notes">${inc.notes}</div>`:''}
+      <div class="irow-top"><div class="irow-type">${escHtml(inc.incident_type||'Unknown')}</div><div class="irow-time">${escHtml(inc.time_str||'')}</div></div>
+      <div class="irow-loc"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>${escHtml(inc.location||'Location Unknown')}</div>
+      <div class="irow-foot"><span class="pri-tag ${pc}">${escHtml(priLabel)}</span>${units}${audioBadge}</div>
+      ${inc.notes?`<div class="irow-notes">${escHtml(inc.notes)}</div>`:''}
     </div>
     <div class="irow-arr">›</div>
   </div>`;
 }
 
-function renderTx(inc){
+function renderTx(inc) {
   return `<div class="tx-entry">
-    <div class="tx-time">${inc.time_str||''} · ${inc.incident_type||'Radio'}</div>
+    <div class="tx-time">${escHtml(inc.time_str||'')} · ${escHtml(inc.incident_type||'Radio')}</div>
     <div class="tx-bubble">${renderTxBubble(inc.transcript||'')}</div>
   </div>`;
 }
 
-function updateStats(incidents){
-  const today=new Date().toDateString();
-  const t=incidents.filter(i=>new Date(i.created_at).toDateString()===today);
-  const high=t.filter(i=>(i.priority||'').toLowerCase()==='high').length;
-  const units=new Set(t.flatMap(i=>i.units||[]));
-  document.getElementById('stat-total').textContent=t.length;
-  document.getElementById('stat-high').textContent=high;
-  document.getElementById('stat-units').textContent=units.size;
-  document.getElementById('incident-count').textContent=`${incidents.length} calls`;
-  if(incidents.length>0) document.getElementById('stat-last').textContent=incidents[0].time_str||'—';
-  if(t.length>1){
-    const hrs=Math.max((new Date(t[0].created_at)-new Date(t[t.length-1].created_at))/3600000,.1);
-    document.getElementById('stat-rate').textContent=(t.length/hrs).toFixed(1);
+// ── Audio player ──────────────────────────────────────────────────────────
+let currentAudioEl = null;
+
+function buildAudioPlayer(audioUrl) {
+  if (!audioUrl) {
+    return `<div class="ap-no-audio">
+      <svg viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2a7 7 0 01-.11 1.23M12 19v4M8 23h8"/></svg>
+      No audio clip saved for this incident
+    </div>`;
   }
-  const types={};
-  t.forEach(i=>{const n=i.incident_type||'Unknown';types[n]=(types[n]||0)+1;});
-  const sorted=Object.entries(types).sort((a,b)=>b[1]-a[1]).slice(0,6);
-  const max=sorted[0]?.[1]||1;
-  document.getElementById('breakdown-list').innerHTML=sorted.map(([tp,ct])=>`
-    <div class="bkdn-row">
-      <div class="bkdn-lbl">${tp}</div>
-      <div class="bkdn-track"><div class="bkdn-fill" style="width:${ct/max*100}%"></div></div>
-      <div class="bkdn-n">${ct}</div>
-    </div>`).join('');
+  // Unique ID per modal open to avoid conflicts
+  const uid = 'ap_' + Date.now();
+  return `<div class="audio-player">
+    <div class="ap-label">▸ Radio Clip · Silence Cut</div>
+    <div class="audio-player-row">
+      <button class="ap-play" id="${uid}_btn" onclick="apToggle('${uid}','${escHtml(audioUrl)}')">
+        <svg id="${uid}_icon" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+      </button>
+      <div class="ap-progress-wrap">
+        <div class="ap-bar-track" id="${uid}_track" onclick="apSeek(event,'${uid}')">
+          <div class="ap-bar-fill" id="${uid}_fill"></div>
+        </div>
+        <div class="ap-times">
+          <span class="ap-time" id="${uid}_cur">0:00</span>
+          <span class="ap-time" id="${uid}_dur">—</span>
+        </div>
+      </div>
+      <div class="ap-vol">
+        <svg viewBox="0 0 24 24"><polygon points="11,5 6,9 2,9 2,15 6,15 11,19"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"/></svg>
+        <input class="ap-vol-slider" type="range" min="0" max="1" step="0.05" value="1"
+          oninput="apVol('${uid}',this.value)">
+      </div>
+    </div>
+    <audio id="${uid}_audio" preload="metadata" src="${escHtml(audioUrl)}"></audio>
+  </div>`;
 }
 
-function showToast(inc){
-  const pc=pClass(inc.priority);
-  const t=document.createElement('div');
-  t.className=`toast ${pc}`;
-  t.innerHTML=`<div class="toast-hd"><div class="toast-dot"></div><div class="toast-type">${inc.incident_type||'Incident'}</div></div><div class="toast-loc">${inc.location||'Unknown location'}</div>`;
-  document.body.appendChild(t);
-  setTimeout(()=>t.remove(),5000);
+function fmtTime(s) {
+  if (!isFinite(s)) return '—';
+  const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+  return `${m}:${ss.toString().padStart(2,'0')}`;
 }
 
-function setConn(on){
-  document.getElementById('conn-dot').className='tb-pill-dot '+(on?'on':'err');
-  document.getElementById('conn-label').textContent=on?'CONNECTED':'OFFLINE';
-}
+function apToggle(uid, url) {
+  const audio  = document.getElementById(uid + '_audio');
+  const btn    = document.getElementById(uid + '_btn');
+  const icon   = document.getElementById(uid + '_icon');
+  const fill   = document.getElementById(uid + '_fill');
+  const cur    = document.getElementById(uid + '_cur');
+  const dur    = document.getElementById(uid + '_dur');
 
-/* ── Map toggle ── */
-function toggleMap(loc){
-  const container=document.getElementById('map-embed-container');
-  if(!container) return;
-  if(container.classList.contains('visible')){
-    container.classList.remove('visible');
-    return;
+  // Stop any other playing audio
+  if (currentAudioEl && currentAudioEl !== audio) {
+    currentAudioEl.pause();
+    // Reset its UI — find its uid
+    const prevId = currentAudioEl.id.replace('_audio','');
+    const prevIcon = document.getElementById(prevId + '_icon');
+    const prevBtn  = document.getElementById(prevId + '_btn');
+    if (prevIcon) prevIcon.innerHTML = '<polygon points="5,3 19,12 5,21"/>';
+    if (prevBtn)  prevBtn.classList.remove('playing');
   }
-  const q=encodeURIComponent(loc+', Amherst NY');
-  container.innerHTML=`<iframe
-    loading="lazy"
-    referrerpolicy="no-referrer-when-downgrade"
-    src="https://www.google.com/maps?q=${q}&output=embed"
-    allowfullscreen>
-  </iframe>`;
+
+  if (audio.paused) {
+    audio.play().catch(()=>{});
+    icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    btn.classList.add('playing');
+    currentAudioEl = audio;
+
+    audio.ontimeupdate = () => {
+      cur.textContent  = fmtTime(audio.currentTime);
+      dur.textContent  = fmtTime(audio.duration);
+      fill.style.width = audio.duration ? (audio.currentTime / audio.duration * 100) + '%' : '0%';
+    };
+    audio.onended = () => {
+      icon.innerHTML = '<polygon points="5,3 19,12 5,21"/>';
+      btn.classList.remove('playing');
+      fill.style.width = '0%';
+      cur.textContent  = '0:00';
+      currentAudioEl   = null;
+    };
+    audio.onloadedmetadata = () => { dur.textContent = fmtTime(audio.duration); };
+  } else {
+    audio.pause();
+    icon.innerHTML = '<polygon points="5,3 19,12 5,21"/>';
+    btn.classList.remove('playing');
+    currentAudioEl = null;
+  }
+}
+
+function apSeek(e, uid) {
+  const audio = document.getElementById(uid + '_audio');
+  const track = document.getElementById(uid + '_track');
+  if (!audio || !audio.duration) return;
+  const rect = track.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  audio.currentTime = ratio * audio.duration;
+}
+
+function apVol(uid, val) {
+  const audio = document.getElementById(uid + '_audio');
+  if (audio) audio.volume = val;
+}
+
+// ── Map toggle ─────────────────────────────────────────────────────────────
+function toggleMap(loc) {
+  const container = document.getElementById('map-embed-container');
+  if (!container) return;
+  if (container.classList.contains('visible')) { container.classList.remove('visible'); return; }
+  const q = encodeURIComponent(loc + ', Amherst NY');
+  container.innerHTML = `<iframe loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://www.google.com/maps?q=${q}&output=embed" allowfullscreen></iframe>`;
   container.classList.add('visible');
 }
 
-/* ── Modal ── */
-function openModal(id){
-  const inc=incidentMap[id];
-  if(!inc) return;
-  const pc=pClass(inc.priority);
-  const priLabel={high:'Priority 1 — High',medium:'Priority 2 — Medium',low:'Priority 3 — Low',unknown:'Unknown Priority'}[pc]||inc.priority;
-  const priChipClass={high:'red',medium:'amber',low:'green',unknown:''}[pc]||'';
-  const incId=makeIncidentId(inc);
-  const createdFull=inc.created_at?new Date(inc.created_at).toLocaleString('en-US',{timeZone:'America/New_York',hour12:false}):'—';
-  const units=inc.units||[];
-  const unitChips=units.length
-    ?units.map(u=>`<span class="m-chip">${u}</span>`).join('')
-    :'<span style="color:var(--text3);font-size:11px;">—</span>';
+// ── Modal ──────────────────────────────────────────────────────────────────
+function openModal(id) {
+  const inc = incidentMap[id];
+  if (!inc) return;
 
-  const loc=inc.location||'Unknown';
-  const locIsKnown=loc!=='Unknown'&&loc!=='Unknown Location'&&loc.length>3;
+  // Stop any playing audio when opening a new modal
+  if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
 
-  const locCell=locIsKnown
-    ?`<span class="loc-link" onclick="toggleMap('${loc.replace(/'/g,"\\'")}')">
-        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-        ${loc}
-      </span>
-      <span class="map-toggle-hint">↓ click to map</span>
-      <div class="map-container" id="map-embed-container"></div>`
-    :`${loc}`;
+  const pc = pClass(inc.priority);
+  const priLabel = {high:'Priority 1 — High',medium:'Priority 2 — Medium',low:'Priority 3 — Low',unknown:'Unknown Priority'}[pc]||inc.priority;
+  const priChipClass = {high:'red',medium:'amber',low:'green',unknown:''}[pc]||'';
+  const incId = makeIncidentId(inc);
+  const createdFull = inc.created_at
+    ? new Date(inc.created_at).toLocaleString('en-US',{timeZone:'America/New_York',hour12:false})
+    : '—';
+  const units = inc.units || [];
+  const unitChips = units.length
+    ? units.map(u=>`<span class="m-chip">${escHtml(u)}</span>`).join('')
+    : '<span style="color:var(--text3);font-size:11px;">—</span>';
+  const loc = inc.location || 'Unknown';
+  const locIsKnown = loc !== 'Unknown' && loc !== 'Unknown Location' && loc.length > 3;
+  const locCell = locIsKnown
+    ? `<span class="loc-link" onclick="toggleMap('${loc.replace(/'/g,"\\'")}')">
+        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>${escHtml(loc)}
+       </span>
+       <span class="map-toggle-hint">↓ click to map</span>
+       <div class="map-container" id="map-embed-container"></div>`
+    : escHtml(loc);
 
-  document.getElementById('modal-title').textContent=inc.incident_type||'Unknown Incident';
-  document.getElementById('modal-sub').textContent=`${incId} · ${inc.time_str||''} · ${loc}`;
-  document.getElementById('modal-bar').className='modal-hdr-bar '+pc;
+  document.getElementById('modal-title').textContent = inc.incident_type || 'Unknown Incident';
+  document.getElementById('modal-sub').textContent   = `${incId} · ${inc.time_str||''} · ${loc}`;
+  document.getElementById('modal-bar').className     = 'modal-hdr-bar ' + pc;
 
-  document.getElementById('modal-body').innerHTML=`
+  document.getElementById('modal-body').innerHTML = `
     <div class="m-section">
       <div class="m-section-title">Incident Details</div>
       <table class="m-table">
         <tr><td>Incident ID</td><td><span class="m-id">${incId}</span></td></tr>
         <tr><td>Created</td><td>${createdFull} ET</td></tr>
-        <tr><td>Type</td><td>${inc.incident_type||'Unknown'}</td></tr>
-        <tr><td>Priority</td><td>
-          <div class="m-pri">
-            <div class="m-pri-dot" style="background:var(--${pc==='high'?'red':pc==='medium'?'amber':pc==='low'?'green':'text3'}-bright)"></div>
-            ${priLabel}
-          </div>
-        </td></tr>
+        <tr><td>Type</td><td>${escHtml(inc.incident_type||'Unknown')}</td></tr>
+        <tr><td>Priority</td><td><div class="m-pri"><div class="m-pri-dot" style="background:var(--${pc==='high'?'red':pc==='medium'?'amber':pc==='low'?'green':'text3'}-bright)"></div>${escHtml(priLabel)}</div></td></tr>
         <tr><td>Location</td><td>${locCell}</td></tr>
         <tr><td>Units Assigned</td><td><div class="m-chips">${unitChips}</div></td></tr>
-        <tr><td>Notes</td><td>${inc.notes||'—'}</td></tr>
+        <tr><td>Notes</td><td>${escHtml(inc.notes||'—')}</td></tr>
       </table>
+    </div>
+    <div class="m-section">
+      <div class="m-section-title">Radio Recording</div>
+      ${buildAudioPlayer(inc.audio_url || null)}
     </div>
     <div class="m-section">
       <div class="m-section-title">Radio Transcript</div>
@@ -489,8 +737,8 @@ function openModal(id){
     <div class="m-section">
       <div class="m-section-title">Classification</div>
       <table class="m-table">
-        <tr><td>Incident Type</td><td><span class="m-chip ${priChipClass}">${inc.incident_type||'Unknown'}</span></td></tr>
-        <tr><td>Priority Level</td><td><span class="m-chip ${priChipClass}">${inc.priority||'Unknown'}</span></td></tr>
+        <tr><td>Incident Type</td><td><span class="m-chip ${priChipClass}">${escHtml(inc.incident_type||'Unknown')}</span></td></tr>
+        <tr><td>Priority Level</td><td><span class="m-chip ${priChipClass}">${escHtml(inc.priority||'Unknown')}</span></td></tr>
         <tr><td>Source</td><td>Amherst PD · P25 Scanner · Groq Whisper</td></tr>
         <tr><td>Talkgroup</td><td>40857 · Erie County NY</td></tr>
       </table>
@@ -499,52 +747,85 @@ function openModal(id){
   document.getElementById('modal-overlay').classList.add('open');
 }
 
-function closeModal(e){if(e.target===document.getElementById('modal-overlay')) closeModalDirect();}
-function closeModalDirect(){document.getElementById('modal-overlay').classList.remove('open');}
-document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModalDirect();});
+function closeModal(e) { if (e.target === document.getElementById('modal-overlay')) closeModalDirect(); }
+function closeModalDirect() {
+  if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModalDirect(); });
 
-/* ── SSE ── */
-const sseStream=new EventSource('https://dispatch-cad.onrender.com/stream');
-sseStream.onopen=()=>setConn(true);
-sseStream.onerror=()=>setConn(false);
-sseStream.onmessage=(event)=>{
-  let inc;try{inc=JSON.parse(event.data);}catch(e){return;}
-  if(!inc||knownIds.has(inc.id)) return;
-  knownIds.add(inc.id);
-  incidentMap[inc.id]=inc;
+// ── SSE live feed ──────────────────────────────────────────────────────────
+const sseStream = new EventSource('https://dispatch-cad.onrender.com/stream');
+sseStream.onopen  = () => setConn(true);
+sseStream.onerror = () => setConn(false);
+sseStream.onmessage = (event) => {
+  let inc; try { inc = JSON.parse(event.data); } catch(e) { return; }
+  if (!inc || knownIds.has(String(inc.id))) return;
+  knownIds.add(String(inc.id));
+  incidentMap[String(inc.id)] = inc;
   allIncidents.unshift(inc);
-  const feed=document.getElementById('incident-feed');
-  if(feed.querySelector('.empty')) feed.innerHTML='';
-  feed.insertAdjacentHTML('afterbegin',renderRow(inc));
-  const tfeed=document.getElementById('transcript-feed');
-  if(tfeed.querySelector('.empty')) tfeed.innerHTML='';
-  tfeed.insertAdjacentHTML('afterbegin',renderTx(inc));
-  updateStats(allIncidents);
+
+  const feed  = document.getElementById('incident-feed');
+  const tfeed = document.getElementById('transcript-feed');
+  if (feed.querySelector('.empty'))  feed.innerHTML = '';
+  if (tfeed.querySelector('.empty')) tfeed.innerHTML = '';
+  feed.insertAdjacentHTML('afterbegin', renderRow(inc));
+  tfeed.insertAdjacentHTML('afterbegin', renderTx(inc));
+
+  fetchStats();
   showToast(inc);
 };
 
-/* ── Initial load ── */
-async function fetchIncidents(){
-  try{
-    const res=await fetch(API);
-    if(!res.ok) throw new Error();
-    const incidents=await res.json();
+// ── Paginated fetch ────────────────────────────────────────────────────────
+async function fetchIncidents(offset = 0) {
+  if (isLoading || allLoaded) return;
+  isLoading = true;
+  try {
+    const res = await fetch(`${API}?offset=${offset}`);
+    if (!res.ok) throw new Error();
+    const incidents = await res.json();
     setConn(true);
-    allIncidents=incidents;
-    incidents.forEach(i=>{knownIds.add(i.id);incidentMap[i.id]=i;});
-    const feed=document.getElementById('incident-feed');
-    const tfeed=document.getElementById('transcript-feed');
-    if(incidents.length>0){
-      feed.innerHTML='';tfeed.innerHTML='';
-      incidents.forEach(i=>{
-        feed.insertAdjacentHTML('beforeend',renderRow(i));
-        tfeed.insertAdjacentHTML('beforeend',renderTx(i));
-      });
-    }
-    updateStats(allIncidents);
-  }catch(e){setConn(false);console.error(e);}
+
+    const feed  = document.getElementById('incident-feed');
+    const tfeed = document.getElementById('transcript-feed');
+
+    if (offset === 0) { feed.innerHTML = ''; tfeed.innerHTML = ''; allIncidents = []; knownIds = new Set(); incidentMap = {}; }
+
+    const newOnes = incidents.filter(i => !knownIds.has(String(i.id)));
+    if (newOnes.length === 0 || incidents.length === 0) { allLoaded = true; isLoading = false; return; }
+
+    newOnes.forEach(i => {
+      knownIds.add(String(i.id));
+      incidentMap[String(i.id)] = i;
+      allIncidents.push(i);
+      feed.insertAdjacentHTML('beforeend', renderRow(i));
+      tfeed.insertAdjacentHTML('beforeend', renderTx(i));
+    });
+
+    if (incidents.length < 50) allLoaded = true;
+    else currentOffset = offset + 50;
+
+    // Stats update on every page load, but the filter inside
+    // updateStats() ensures only today's incidents count
+    fetchStats();
+  } catch(e) {
+    setConn(false);
+    console.error(e);
+  }
+  isLoading = false;
 }
-fetchIncidents();
+
+// Infinite scroll
+document.getElementById('incident-feed').addEventListener('scroll', function() {
+  if (allLoaded || isLoading) return;
+  if (this.scrollTop + this.clientHeight >= this.scrollHeight - 150) {
+    fetchIncidents(currentOffset);
+  }
+});
+
+fetchIncidents(0);
+fetchStats();
+setInterval(fetchStats, 60000);
 </script>
 </body>
 </html>
