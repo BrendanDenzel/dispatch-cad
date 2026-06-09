@@ -13,7 +13,7 @@ SUPABASE_URL  = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY  = os.environ.get("SUPABASE_KEY")
 STREAM_URL    = os.environ.get("STREAM_URL")
 CHUNK_SECONDS = 30
-MAX_INCIDENTS = 500
+MAX_INCIDENTS = 1000
 AUDIO_BUCKET  = "audio-clips"
 
 EASTERN     = ZoneInfo("America/New_York")
