@@ -1,5 +1,5 @@
 import os, io, time, requests, threading, tempfile, json, subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
@@ -254,6 +254,143 @@ def parse_transcript(transcript: str):
         return None
 
 
+MERGE_PROMPT = """You are analyzing police radio transmissions for Erie County / Amherst NY.
+
+You have a new 30-second radio transcript and a list of recent active incidents from the last 10 minutes.
+Decide if the new transcript is a continuation of an existing incident or a brand new one.
+
+Recent incidents:
+{incidents}
+
+New transcript: "{transcript}"
+
+Rules:
+- Only merge if you are CONFIDENT this is the same incident (same unit actively working it, same scene, direct follow-up)
+- If a unit sounds like it is clearing, going available, or signing off from an incident do NOT merge
+- If the transcript is ambiguous, unclear, or could go either way return null
+- If the transcript is just noise, chatter, or unrelated radio traffic return null
+- Partial unit number matches are NOT enough on their own
+- A unit being mentioned does not mean it is the same incident if the context sounds different
+- When in doubt return null — it is always safer to create a new incident than wrongly merge
+
+Respond with ONLY one of:
+- A number: the id of the incident this belongs to
+- null: this is a new incident or you are not sure
+
+No explanation. No markdown. Just the number or null."""
+
+
+def find_mergeable_incident(transcript: str) -> int | None:
+    try:
+        db = get_db()
+        cutoff = (datetime.now(EASTERN) - timedelta(minutes=10)).isoformat()
+
+        recent = (db.table("incidents")
+                  .select("id, incident_type, location, units, priority, transcript, time_str")
+                  .gte("created_at", cutoff)
+                  .order("created_at", desc=True)
+                  .limit(8)
+                  .execute()).data or []
+
+        if not recent:
+            return None
+
+        inc_lines = []
+        for inc in recent:
+            units = ", ".join(inc.get("units") or []) or "unknown"
+            tx = (inc.get("transcript") or "")[:300]
+            inc_lines.append(
+                f"[id {inc['id']}] {inc.get('time_str','?')} | "
+                f"Type: {inc.get('incident_type','Unknown')} | "
+                f"Location: {inc.get('location','Unknown')} | "
+                f"Units: {units} | "
+                f"Priority: {inc.get('priority','Unknown')}\n"
+                f"  Transcript so far: {tx}"
+            )
+
+        prompt = MERGE_PROMPT.format(
+            incidents="\n\n".join(inc_lines),
+            transcript=transcript
+        )
+
+        resp = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=10,
+            temperature=0.0
+        )
+
+        result = resp.choices[0].message.content.strip().lower()
+
+        if result == "null" or result == "":
+            return None
+
+        known_ids = {inc["id"] for inc in recent}
+        parsed_id = int(result)
+        if parsed_id in known_ids:
+            return parsed_id
+
+        return None
+
+    except Exception as e:
+        print(f"Merge check error: {e}", flush=True)
+        return None
+
+
+def merge_into_incident(inc_id: int, parsed: dict, transcript: str, audio_url: str | None):
+    try:
+        db = get_db()
+        existing = db.table("incidents").select("*").eq("id", inc_id).execute().data[0]
+
+        # Append transcript with separator
+        old_tx = existing.get("transcript") or ""
+        combined_tx = old_tx + "\n---\n" + transcript
+
+        # Only ever upgrade priority, never downgrade
+        pri_rank = {"High": 3, "Medium": 2, "Low": 1, "Unknown": 0}
+        old_pri = existing.get("priority", "Unknown")
+        new_pri = parsed.get("priority", "Unknown")
+        best_pri = old_pri if pri_rank.get(old_pri, 0) >= pri_rank.get(new_pri, 0) else new_pri
+
+        # Merge unit lists, deduplicated
+        merged_units = list(set((existing.get("units") or []) + (parsed.get("units") or [])))
+
+        # Only fill in fields that are currently unknown — never overwrite good data
+        def prefer_known(old, new):
+            if not old or old.lower() in ("unknown", ""):
+                return new if new and new.lower() not in ("unknown", "") else old
+            return old
+
+        # Append new audio URL to the existing list; never discard a clip
+        existing_clips = existing.get("audio_url") or []
+        if isinstance(existing_clips, str):
+            # Migrate legacy single-string value gracefully
+            existing_clips = [existing_clips] if existing_clips else []
+        new_clips = existing_clips + ([audio_url] if audio_url else [])
+
+        update = {
+            "transcript":    combined_tx,
+            "priority":      best_pri,
+            "units":         merged_units,
+            "location":      prefer_known(existing.get("location"), parsed.get("location")),
+            "incident_type": prefer_known(existing.get("incident_type"), parsed.get("incident_type")),
+            "notes":         prefer_known(existing.get("notes"), parsed.get("notes")),
+            "audio_url":     new_clips,
+        }
+
+        res = db.table("incidents").update(update).eq("id", inc_id).execute()
+        updated = res.data[0] if res.data else {**existing, **update}
+
+        # Broadcast update so frontend can refresh the row in place
+        for q in clients:
+            q.append({"__update": True, **updated})
+
+        print(f"Merged chunk into incident id={inc_id} | type={update['incident_type']}", flush=True)
+
+    except Exception as e:
+        print(f"Merge error: {e}", flush=True)
+
+
 def purge_old_incidents():
     try:
         db    = get_db()
@@ -266,8 +403,11 @@ def purge_old_incidents():
                   .limit(total - MAX_INCIDENTS)
                   .execute()).data or []
         for row in oldest:
-            if row.get("audio_url"):
-                delete_audio(row["audio_url"])
+            clips = row.get("audio_url") or []
+            if isinstance(clips, str):
+                clips = [clips] if clips else []
+            for url in clips:
+                delete_audio(url)
             db.table("incidents").delete().eq("id", row["id"]).execute()
             print(f"Purged incident id={row['id']}", flush=True)
     except Exception as e:
@@ -276,6 +416,14 @@ def purge_old_incidents():
 
 def save_incident(parsed: dict, transcript: str, audio_url: str | None):
     try:
+        # Always check for a mergeable incident before creating a new row
+        merge_id = find_mergeable_incident(transcript)
+
+        if merge_id:
+            merge_into_incident(merge_id, parsed, transcript, audio_url)
+            return
+
+        # No match found — save as a fresh incident
         db  = get_db()
         row = {
             "incident_type": parsed.get("incident_type", "Unknown"),
@@ -285,14 +433,15 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
             "notes":         parsed.get("notes", ""),
             "transcript":    transcript,
             "time_str":      datetime.now(EASTERN).strftime("%I:%M %p"),
-            "audio_url":     audio_url,
+            "audio_url":     [audio_url] if audio_url else [],
         }
         res   = db.table("incidents").insert(row).execute()
         saved = res.data[0] if res.data else row
         for q in clients:
             q.append(saved)
-        print(f"Saved + broadcasted: {row['incident_type']}", flush=True)
+        print(f"New incident: {row['incident_type']} @ {row['location']}", flush=True)
         purge_old_incidents()
+
     except Exception as e:
         print(f"Save error: {e}", flush=True)
 
