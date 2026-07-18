@@ -1,5 +1,5 @@
 import os, io, time, requests, threading, tempfile, json, subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
@@ -15,6 +15,10 @@ STREAM_URL    = os.environ.get("STREAM_URL")
 CHUNK_SECONDS = 30
 MAX_INCIDENTS = 5000
 AUDIO_BUCKET  = "audio-clips"
+
+# How far back we look for incidents a new transmission might belong to.
+OPEN_WINDOW_MINUTES  = 20
+MAX_OPEN_CANDIDATES  = 15
 
 EASTERN     = ZoneInfo("America/New_York")
 groq_client = Groq(api_key=GROQ_API_KEY)
@@ -119,7 +123,7 @@ def get_stats():
         return jsonify({"total": 0, "all_time": 0, "high": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
 
 # ─────────────────────────────────────────────
-# Scanner helpers
+# Scanner capture / audio helpers
 # ─────────────────────────────────────────────
 
 def capture_chunk():
@@ -181,7 +185,7 @@ def trim_silence(audio_bytes: bytes) -> bytes:
 def upload_audio(audio_bytes: bytes) -> str | None:
     try:
         db   = get_db()
-        ts   = datetime.now(EASTERN).strftime("%Y%m%d_%H%M%S")
+        ts   = datetime.now(EASTERN).strftime("%Y%m%d_%H%M%S_%f")
         path = f"clips/clip_{ts}.mp3"
         db.storage.from_(AUDIO_BUCKET).upload(
             path, audio_bytes, {"content-type": "audio/mpeg", "upsert": "false"}
@@ -202,6 +206,53 @@ def delete_audio(audio_url: str):
         print(f"Audio delete error: {e}", flush=True)
 
 
+def download_audio_bytes(url: str) -> bytes | None:
+    try:
+        resp = requests.get(url, timeout=20)
+        resp.raise_for_status()
+        return resp.content
+    except Exception as e:
+        print(f"Audio download error: {e}", flush=True)
+        return None
+
+
+def merge_audio(old_bytes: bytes, new_bytes: bytes) -> bytes:
+    """Concatenate two mp3 clips into one continuous clip so the incident
+    has a single combined recording instead of separate snippets."""
+    try:
+        with tempfile.NamedTemporaryFile(suffix="_old.mp3", delete=False) as f1:
+            f1.write(old_bytes)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(suffix="_new.mp3", delete=False) as f2:
+            f2.write(new_bytes)
+            new_path = f2.name
+        out_path = old_path.replace("_old.mp3", "_merged.mp3")
+
+        result = subprocess.run([
+            "ffmpeg", "-y",
+            "-i", old_path, "-i", new_path,
+            "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[out]",
+            "-map", "[out]", "-b:a", "64k",
+            out_path
+        ], capture_output=True, timeout=30)
+
+        os.unlink(old_path)
+        os.unlink(new_path)
+
+        if result.returncode != 0 or not os.path.exists(out_path):
+            print("ffmpeg merge failed, keeping old audio only", flush=True)
+            return old_bytes
+
+        with open(out_path, "rb") as f:
+            merged = f.read()
+        os.unlink(out_path)
+        return merged
+
+    except Exception as e:
+        print(f"Audio merge error: {e}", flush=True)
+        return old_bytes
+
+
 def transcribe(audio_bytes: bytes) -> str:
     try:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
@@ -220,37 +271,89 @@ def transcribe(audio_bytes: bytes) -> str:
         return ""
 
 
-PARSE_PROMPT = """You are a police dispatch parser for Erie County / Amherst NY.
-Extract structured data from this radio transcript.
+# ─────────────────────────────────────────────
+# Correlation: decide chatter / new incident / continuation of an existing one
+# ─────────────────────────────────────────────
 
-Transcript: {transcript}
+CORRELATE_PROMPT = """You are a police dispatch parser and incident correlator for Erie County / Amherst NY.
+
+New radio transmission (format is "HH:MM:SS: transcript"):
+{new_entry}
+
+Currently open incidents from the last {window_minutes} minutes:
+{open_incidents_block}
+
+Decide ONE of:
+1. "chatter" - this transmission has no real dispatch content (radio checks, static, unrelated banter, bare acknowledgements with no information)
+2. "continuation" - this transmission is clearly about one of the open incidents listed above (same unit(s), same location/address, or an explicit follow-up on it)
+3. "new" - this is a new, distinct incident not covered by the list above
 
 Respond ONLY with a valid JSON object with these exact fields:
-- incident_type: string (e.g. "MVA", "Domestic", "Theft", "Medical", "Noise Complaint", "Burglary", "Suspicious", "Unknown")
-- location: string (address or intersection mentioned, or "Unknown")
-- units: array of strings (unit numbers or call signs mentioned, empty array if none)
-- priority: string, one of exactly: "High", "Medium", "Low", "Unknown"
-- notes: string (any other relevant detail, max 1 sentence)
+{{
+  "action": "chatter" | "continuation" | "new",
+  "incident_id": <id of the matched incident if action is "continuation", otherwise null>,
+  "incident_type": string,
+  "location": string,
+  "units": array of strings mentioned in THIS transmission (empty array if none),
+  "priority": one of exactly "High", "Medium", "Low", "Unknown",
+  "notes": string, max 1 sentence, describing what is new in THIS transmission
+}}
 
-If the transcript is static, silence, or contains no real dispatch content return exactly: null
+Rules:
+- For "continuation": incident_type/location/priority should reflect the original incident's context; units/notes should reflect only what's new in this transmission.
+- Only choose "continuation" if you are reasonably confident (matching unit numbers, matching address/location, or an explicit reference back to it). When unsure, prefer "new".
+- If action is "chatter", other fields can be "Unknown" / empty — they will be ignored.
+- Return raw JSON only. No markdown, no explanation, no code blocks."""
 
-Return raw JSON only. No markdown, no explanation, no code blocks."""
 
-
-def parse_transcript(transcript: str):
+def fetch_open_incidents() -> list:
     try:
+        db = get_db()
+        cutoff = (datetime.now(ZoneInfo("UTC")) - timedelta(minutes=OPEN_WINDOW_MINUTES)).isoformat()
+        rows = (db.table("incidents")
+                .select("id, incident_type, location, units, transcript, notes, priority, created_at")
+                .gte("created_at", cutoff)
+                .order("created_at", desc=True)
+                .limit(MAX_OPEN_CANDIDATES)
+                .execute()).data or []
+        return rows
+    except Exception as e:
+        print(f"Fetch open incidents error: {e}", flush=True)
+        return []
+
+
+def format_open_incidents(open_incidents: list) -> str:
+    if not open_incidents:
+        return f"(none — no open incidents in the last {OPEN_WINDOW_MINUTES} minutes)"
+    blocks = []
+    for inc in open_incidents:
+        units = ", ".join(inc.get("units") or []) or "—"
+        blocks.append(
+            f"[ID {inc['id']}] Type: {inc.get('incident_type', 'Unknown')} | "
+            f"Location: {inc.get('location', 'Unknown')} | Units: {units}\n"
+            f"Transcript so far:\n{inc.get('transcript', '')}"
+        )
+    return "\n\n".join(blocks)
+
+
+def correlate_transcript(timestamped_entry: str, open_incidents: list):
+    try:
+        prompt = CORRELATE_PROMPT.format(
+            new_entry=timestamped_entry,
+            window_minutes=OPEN_WINDOW_MINUTES,
+            open_incidents_block=format_open_incidents(open_incidents)
+        )
         resp = groq_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": PARSE_PROMPT.format(transcript=transcript)}],
-            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=400,
             temperature=0.1
         )
         text = resp.choices[0].message.content.strip()
-        if text.lower() == "null":
-            return None
-        return json.loads(text.replace("```json", "").replace("```", "").strip())
+        text = text.replace("```json", "").replace("```", "").strip()
+        return json.loads(text)
     except Exception as e:
-        print(f"Parse error: {e}", flush=True)
+        print(f"Correlate error: {e}", flush=True)
         return None
 
 
@@ -274,7 +377,7 @@ def purge_old_incidents():
         print(f"Purge error: {e}", flush=True)
 
 
-def save_incident(parsed: dict, transcript: str, audio_url: str | None):
+def create_incident(parsed: dict, timestamped_entry: str, audio_url: str | None):
     try:
         db  = get_db()
         row = {
@@ -283,18 +386,76 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
             "units":         parsed.get("units", []),
             "priority":      parsed.get("priority", "Unknown"),
             "notes":         parsed.get("notes", ""),
-            "transcript":    transcript,
+            "transcript":    timestamped_entry,
             "time_str":      datetime.now(EASTERN).strftime("%I:%M %p"),
             "audio_url":     audio_url,
         }
         res   = db.table("incidents").insert(row).execute()
         saved = res.data[0] if res.data else row
         for q in clients:
-            q.append(saved)
-        print(f"Saved + broadcasted: {row['incident_type']}", flush=True)
+            q.append({"event": "new", **saved})
+        print(f"Created incident: {row['incident_type']}", flush=True)
         purge_old_incidents()
     except Exception as e:
-        print(f"Save error: {e}", flush=True)
+        print(f"Create incident error: {e}", flush=True)
+
+
+def update_incident_continuation(incident_id, parsed: dict, timestamped_entry: str, new_audio_bytes: bytes | None):
+    try:
+        db = get_db()
+        existing = db.table("incidents").select("*").eq("id", incident_id).single().execute().data
+        if not existing:
+            print(f"Continuation target {incident_id} not found, creating new instead", flush=True)
+            audio_url = upload_audio(new_audio_bytes) if new_audio_bytes else None
+            create_incident(parsed, timestamped_entry, audio_url)
+            return
+
+        merged_transcript = (existing.get("transcript") or "").rstrip() + "\n" + timestamped_entry
+
+        old_units    = set(existing.get("units") or [])
+        new_units    = set(parsed.get("units") or [])
+        merged_units = sorted(old_units | new_units)
+
+        old_notes    = (existing.get("notes") or "").strip()
+        new_note     = (parsed.get("notes") or "").strip()
+        merged_notes = f"{old_notes} | {new_note}".strip(" |") if new_note else old_notes
+
+        # Combine audio into one continuous clip instead of leaving separate snippets.
+        new_audio_url = existing.get("audio_url")
+        if new_audio_bytes:
+            if existing.get("audio_url"):
+                old_bytes = download_audio_bytes(existing["audio_url"])
+                merged_bytes = merge_audio(old_bytes, new_audio_bytes) if old_bytes else new_audio_bytes
+            else:
+                merged_bytes = new_audio_bytes
+
+            uploaded_url = upload_audio(merged_bytes)
+            if uploaded_url:
+                if existing.get("audio_url"):
+                    delete_audio(existing["audio_url"])
+                new_audio_url = uploaded_url
+
+        update_row = {
+            "transcript": merged_transcript,
+            "units":      merged_units,
+            "notes":      merged_notes,
+            "audio_url":  new_audio_url,
+        }
+
+        # Let priority escalate (e.g. Medium -> High) but never silently downgrade it.
+        priority_rank = {"High": 3, "Medium": 2, "Low": 1, "Unknown": 0}
+        new_priority  = parsed.get("priority", "Unknown")
+        if priority_rank.get(new_priority, 0) > priority_rank.get(existing.get("priority", "Unknown"), 0):
+            update_row["priority"] = new_priority
+
+        res   = db.table("incidents").update(update_row).eq("id", incident_id).execute()
+        saved = res.data[0] if res.data else {**existing, **update_row}
+        for q in clients:
+            q.append({"event": "update", **saved})
+        print(f"Updated incident {incident_id} (continuation)", flush=True)
+
+    except Exception as e:
+        print(f"Update continuation error: {e}", flush=True)
 
 
 # ─────────────────────────────────────────────
@@ -305,6 +466,8 @@ def scanner_loop():
     print("Scanner loop started...", flush=True)
     while True:
         try:
+            chunk_time = datetime.now(EASTERN)
+
             print("Capturing audio chunk...", flush=True)
             audio = capture_chunk()
             if not audio:
@@ -317,28 +480,33 @@ def scanner_loop():
                 print("Pure silence, skipping.", flush=True)
                 continue
 
-            print("Uploading audio...", flush=True)
-            audio_url = upload_audio(trimmed)
-
             print("Transcribing...", flush=True)
             transcript = transcribe(trimmed)
             print(f"Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
 
             if len(transcript) < 15:
                 print("Too short, skipping.", flush=True)
-                if audio_url:
-                    delete_audio(audio_url)
                 continue
 
-            print("Parsing...", flush=True)
-            parsed = parse_transcript(transcript)
+            timestamped_entry = f"{chunk_time.strftime('%H:%M:%S')}: {transcript}"
 
-            if parsed:
-                save_incident(parsed, transcript, audio_url)
+            print("Fetching open incidents for correlation...", flush=True)
+            open_incidents = fetch_open_incidents()
+
+            print("Correlating...", flush=True)
+            result = correlate_transcript(timestamped_entry, open_incidents)
+
+            if not result or result.get("action") == "chatter":
+                print("Chatter / no incident detected, skipping.", flush=True)
+                continue
+
+            action = result.get("action")
+
+            if action == "continuation" and result.get("incident_id"):
+                update_incident_continuation(result["incident_id"], result, timestamped_entry, trimmed)
             else:
-                print("No incident detected, cleaning up.", flush=True)
-                if audio_url:
-                    delete_audio(audio_url)
+                audio_url = upload_audio(trimmed)
+                create_incident(result, timestamped_entry, audio_url)
 
         except Exception as e:
             import traceback
