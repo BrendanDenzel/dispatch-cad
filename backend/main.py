@@ -1,4 +1,5 @@
 import os, io, time, requests, threading, tempfile, json, subprocess
+import queue as queue_mod
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, request, Response
@@ -19,6 +20,16 @@ AUDIO_BUCKET  = "audio-clips"
 # How far back we look for incidents a new transmission might belong to.
 OPEN_WINDOW_MINUTES  = 20
 MAX_OPEN_CANDIDATES  = 15
+
+# Anything the correlator drops (chatter, too-short fragments) still gets
+# written here so nothing said on the channel is silently gone — it's just
+# not promoted to an incident. Flat file, no DB schema involved.
+CHATTER_LOG_PATH = os.environ.get("CHATTER_LOG_PATH", "/tmp/chatter_log.txt")
+_chatter_lock     = threading.Lock()
+
+# Audio chunks flow from the capture thread to the processing thread through
+# this queue. Capture never waits on processing, so recording never pauses.
+audio_queue = queue_mod.Queue()
 
 EASTERN     = ZoneInfo("America/New_York")
 groq_client = Groq(api_key=GROQ_API_KEY)
@@ -122,26 +133,34 @@ def get_stats():
         print(f"Stats error: {e}", flush=True)
         return jsonify({"total": 0, "all_time": 0, "high": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
 
+@app.route("/chatter-log")
+def chatter_log():
+    """Everything the correlator dropped (chatter / too-short fragments),
+    so you can confirm nothing on the channel is actually being lost."""
+    try:
+        limit = request.args.get("limit", 200, type=int)
+        if not os.path.exists(CHATTER_LOG_PATH):
+            return jsonify([])
+        with _chatter_lock:
+            with open(CHATTER_LOG_PATH) as f:
+                lines = f.readlines()[-limit:]
+        return jsonify([l.rstrip("\n") for l in lines])
+    except Exception as e:
+        print(f"Chatter log read error: {e}", flush=True)
+        return jsonify([])
+
 # ─────────────────────────────────────────────
 # Scanner capture / audio helpers
 # ─────────────────────────────────────────────
 
-def capture_chunk():
+def log_chatter(chunk_time: datetime, transcript: str, reason: str):
     try:
-        resp = requests.get(STREAM_URL, stream=True, timeout=(10, 45))
-        buf  = io.BytesIO()
-        bytes_read = 0
-        target = 16000 * CHUNK_SECONDS
-        for chunk in resp.iter_content(chunk_size=4096):
-            buf.write(chunk)
-            bytes_read += len(chunk)
-            if bytes_read >= target:
-                break
-        resp.close()
-        return buf.getvalue()
+        line = f"{chunk_time.strftime('%Y-%m-%d %H:%M:%S')} [{reason}] {transcript}\n"
+        with _chatter_lock:
+            with open(CHATTER_LOG_PATH, "a") as f:
+                f.write(line)
     except Exception as e:
-        print(f"Capture error: {e}", flush=True)
-        return None
+        print(f"Chatter log write error: {e}", flush=True)
 
 
 def trim_silence(audio_bytes: bytes) -> bytes:
@@ -459,45 +478,77 @@ def update_incident_continuation(incident_id, parsed: dict, timestamped_entry: s
 
 
 # ─────────────────────────────────────────────
-# Main scanner loop
+# Capture thread — reads the live stream continuously and never pauses to
+# wait on transcription/correlation/saving. It slices off a ~CHUNK_SECONDS
+# chunk, hands it to audio_queue, and immediately keeps reading. This is
+# what closes the old "dead air" gap where the recorder stopped listening
+# while a chunk was being processed.
 # ─────────────────────────────────────────────
 
-def scanner_loop():
-    print("Scanner loop started...", flush=True)
+def capture_loop():
+    print("Capture loop started...", flush=True)
+    target_bytes = 16000 * CHUNK_SECONDS
     while True:
         try:
-            chunk_time = datetime.now(EASTERN)
+            resp = requests.get(STREAM_URL, stream=True, timeout=(10, 60))
+            buf = io.BytesIO()
+            bytes_read = 0
+            chunk_start = datetime.now(EASTERN)
 
-            print("Capturing audio chunk...", flush=True)
-            audio = capture_chunk()
-            if not audio:
-                time.sleep(5)
-                continue
+            for chunk in resp.iter_content(chunk_size=4096):
+                if not chunk:
+                    continue
+                buf.write(chunk)
+                bytes_read += len(chunk)
+                if bytes_read >= target_bytes:
+                    audio_queue.put((chunk_start, buf.getvalue()))
+                    buf = io.BytesIO()
+                    bytes_read = 0
+                    chunk_start = datetime.now(EASTERN)
 
-            print("Trimming silence...", flush=True)
+            resp.close()
+            print("Stream ended, reconnecting immediately...", flush=True)
+
+        except Exception as e:
+            print(f"Capture loop error: {e}, reconnecting...", flush=True)
+            time.sleep(2)
+
+
+# ─────────────────────────────────────────────
+# Processing thread — does all the slow work (trim, transcribe, correlate,
+# save) off the queue, at its own pace. If it falls behind, chunks just wait
+# in the queue — audio itself is never dropped because of processing time.
+# ─────────────────────────────────────────────
+
+def processing_loop():
+    print("Processing loop started...", flush=True)
+    while True:
+        try:
+            chunk_time, audio = audio_queue.get()
+
+            backlog = audio_queue.qsize()
+            if backlog > 5:
+                print(f"Warning: processing is behind by {backlog} queued chunk(s)", flush=True)
+
             trimmed = trim_silence(audio)
             if not trimmed:
-                print("Pure silence, skipping.", flush=True)
                 continue
 
-            print("Transcribing...", flush=True)
             transcript = transcribe(trimmed)
-            print(f"Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
+            print(f"[{chunk_time.strftime('%H:%M:%S')}] Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
 
             if len(transcript) < 15:
-                print("Too short, skipping.", flush=True)
+                if transcript:
+                    log_chatter(chunk_time, transcript, reason="too_short")
                 continue
 
             timestamped_entry = f"{chunk_time.strftime('%H:%M:%S')}: {transcript}"
 
-            print("Fetching open incidents for correlation...", flush=True)
             open_incidents = fetch_open_incidents()
-
-            print("Correlating...", flush=True)
             result = correlate_transcript(timestamped_entry, open_incidents)
 
             if not result or result.get("action") == "chatter":
-                print("Chatter / no incident detected, skipping.", flush=True)
+                log_chatter(chunk_time, transcript, reason="chatter")
                 continue
 
             action = result.get("action")
@@ -510,13 +561,15 @@ def scanner_loop():
 
         except Exception as e:
             import traceback
-            print(f"Loop error: {e}", flush=True)
+            print(f"Processing loop error: {e}", flush=True)
             traceback.print_exc()
-            time.sleep(10)
+            time.sleep(2)
 
 
-thread = threading.Thread(target=scanner_loop, daemon=True)
-thread.start()
+capture_thread    = threading.Thread(target=capture_loop, daemon=True)
+processing_thread = threading.Thread(target=processing_loop, daemon=True)
+capture_thread.start()
+processing_thread.start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
