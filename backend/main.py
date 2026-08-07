@@ -123,21 +123,55 @@ def get_stats():
 # ─────────────────────────────────────────────
 
 def capture_chunk():
+    """
+    Pulls CHUNK_SECONDS of audio from STREAM_URL using ffmpeg, which
+    natively understands both HLS (.m3u8) playlists and plain
+    Icecast/Shoutcast-style raw audio streams (.mp3/.aac/etc).
+    Returns raw mp3 bytes, or None on failure.
+    """
+    out_path = tempfile.mktemp(suffix=".mp3")
     try:
-        resp = requests.get(STREAM_URL, stream=True, timeout=(10, 45))
-        buf  = io.BytesIO()
-        bytes_read = 0
-        target = 16000 * CHUNK_SECONDS
-        for chunk in resp.iter_content(chunk_size=4096):
-            buf.write(chunk)
-            bytes_read += len(chunk)
-            if bytes_read >= target:
-                break
-        resp.close()
-        return buf.getvalue()
+        cmd = [
+            "ffmpeg", "-y",
+            # Some HLS relays are picky about identifying themselves as a browser/player.
+            "-user_agent", "Mozilla/5.0 (compatible; ScannerBot/1.0)",
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
+            "-i", STREAM_URL,
+            "-t", str(CHUNK_SECONDS),
+            "-vn",
+            "-acodec", "libmp3lame",
+            "-b:a", "64k",
+            out_path
+        ]
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            timeout=CHUNK_SECONDS + 30
+        )
+
+        if result.returncode != 0 or not os.path.exists(out_path) or os.path.getsize(out_path) < 1000:
+            stderr_tail = result.stderr.decode(errors="ignore")[-500:]
+            print(f"ffmpeg capture failed (code {result.returncode}): {stderr_tail}", flush=True)
+            return None
+
+        with open(out_path, "rb") as f:
+            data = f.read()
+        return data
+
+    except subprocess.TimeoutExpired:
+        print("Capture error: ffmpeg timed out", flush=True)
+        return None
     except Exception as e:
         print(f"Capture error: {e}", flush=True)
         return None
+    finally:
+        if os.path.exists(out_path):
+            try:
+                os.unlink(out_path)
+            except Exception:
+                pass
 
 
 def trim_silence(audio_bytes: bytes) -> bytes:
