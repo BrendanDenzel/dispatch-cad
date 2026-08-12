@@ -128,10 +128,9 @@ def get_stats():
 
 def curl_fetch(url: str) -> bytes:
     result = subprocess.run(
-    ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-     "-of", "default=noprint_wrappers=1:nokey=1", path],
-    capture_output=True, text=True, timeout=15
-)
+        ["curl", "-sS", "-f", "--max-time", "15", url],
+        capture_output=True,
+    )
     if result.returncode != 0:
         raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
                             f"{result.stderr.decode(errors='ignore')[:200]}")
@@ -202,10 +201,10 @@ def get_duration(audio_bytes: bytes) -> float:
         path = f.name
     try:
         result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrapper=1:nokey=1", path],
-            capture_output=True, text=True, timeout=15
-        )
+    ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+     "-of", "default=noprint_wrappers=1:nokey=1", path],
+    capture_output=True, text=True, timeout=15
+)
         return float(result.stdout.strip())
     except Exception as e:
         print(f"[capture] ffprobe duration check failed: {e}", flush=True)
