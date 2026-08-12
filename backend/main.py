@@ -1,4 +1,4 @@
-import os, io, time, requests, threading, tempfile, json, subprocess
+import os, time, threading, tempfile, json, subprocess
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from flask import Flask, jsonify, request, Response
@@ -8,13 +8,12 @@ from supabase import create_client
 
 clients = []
 
-GROQ_API_KEY  = os.environ.get("GROQ_API_KEY")
-SUPABASE_URL  = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY  = os.environ.get("SUPABASE_KEY")
-STREAM_URL    = os.environ.get("STREAM_URL")  # now expected to be a .m3u8 playlist URL
-CHUNK_SECONDS = 30
-MAX_INCIDENTS = 5000
-AUDIO_BUCKET  = "audio-clips"
+GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
+SUPABASE_URL   = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY   = os.environ.get("SUPABASE_KEY")
+INGEST_SECRET  = os.environ.get("INGEST_SECRET")  # shared secret the Pi must send
+MAX_INCIDENTS  = 5000
+AUDIO_BUCKET   = "audio-clips"
 
 EASTERN     = ZoneInfo("America/New_York")
 groq_client = Groq(api_key=GROQ_API_KEY)
@@ -118,64 +117,34 @@ def get_stats():
         print(f"Stats error: {e}", flush=True)
         return jsonify({"total": 0, "all_time": 0, "high": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
 
+
 # ─────────────────────────────────────────────
-# Scanner helpers
+# NEW: ingest endpoint — receives audio chunks pushed from the Pi
 # ─────────────────────────────────────────────
 
-def capture_chunk():
-    """
-    Pulls CHUNK_SECONDS of audio directly from the live HLS (.m3u8) stream
-    using ffmpeg. ffmpeg natively understands HLS: it fetches the playlist,
-    follows the segment (.ts/.aac) URLs as they roll forward, and stitches
-    them into one continuous output — this replaces the old approach of
-    reading raw bytes off a single long-lived MP3 HTTP connection, which
-    doesn't apply to a playlist-based stream.
-    """
-    out_path = None
-    try:
-        out_path = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False).name
+@app.route("/ingest-audio", methods=["POST"])
+def ingest_audio():
+    # Simple shared-secret check so randoms on the internet can't spam this endpoint
+    if not INGEST_SECRET or request.headers.get("X-Ingest-Secret") != INGEST_SECRET:
+        return jsonify({"error": "unauthorized"}), 401
 
-        cmd = [
-            "ffmpeg", "-y",
-            "-loglevel", "error",
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
-            "-i", STREAM_URL,
-            "-t", str(CHUNK_SECONDS),   # capture a fixed-length window
-            "-vn",
-            "-ac", "1",
-            "-ar", "16000",
-            "-acodec", "libmp3lame",
-            "-b:a", "64k",
-            out_path,
-        ]
+    if "audio" not in request.files:
+        return jsonify({"error": "missing 'audio' file field"}), 400
 
-        # Give ffmpeg some headroom beyond CHUNK_SECONDS for playlist
-        # fetch + segment download overhead before we consider it hung.
-        result = subprocess.run(cmd, capture_output=True, timeout=CHUNK_SECONDS + 30)
+    audio_bytes = request.files["audio"].read()
+    if not audio_bytes:
+        return jsonify({"error": "empty audio"}), 400
 
-        if result.returncode != 0 or not os.path.exists(out_path) or os.path.getsize(out_path) < 1000:
-            err = result.stderr.decode(errors="ignore")[-300:] if result.stderr else ""
-            print(f"ffmpeg capture failed (code {result.returncode}): {err}", flush=True)
-            return None
+    # Process in a background thread so the Pi's upload request returns fast
+    # and doesn't have to wait on transcription/parsing to finish.
+    threading.Thread(target=process_audio_chunk, args=(audio_bytes,), daemon=True).start()
+    return jsonify({"status": "received", "bytes": len(audio_bytes)}), 202
 
-        with open(out_path, "rb") as f:
-            return f.read()
 
-    except subprocess.TimeoutExpired:
-        print("ffmpeg capture timed out", flush=True)
-        return None
-    except Exception as e:
-        print(f"Capture error: {e}", flush=True)
-        return None
-    finally:
-        if out_path and os.path.exists(out_path):
-            try:
-                os.unlink(out_path)
-            except OSError:
-                pass
-
+# ─────────────────────────────────────────────
+# Processing pipeline (same logic as before, now triggered by /ingest-audio
+# instead of by a local capture_chunk() loop)
+# ─────────────────────────────────────────────
 
 def trim_silence(audio_bytes: bytes) -> bytes:
     try:
@@ -334,58 +303,48 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
         print(f"Save error: {e}", flush=True)
 
 
-# ─────────────────────────────────────────────
-# Main scanner loop
-# ─────────────────────────────────────────────
+def process_audio_chunk(audio: bytes):
+    """
+    Runs the full pipeline on one chunk of audio, regardless of where it
+    came from. Previously this was inline in scanner_loop() and fed by a
+    local capture_chunk() fetching Broadcastify directly. Now it's fed by
+    whatever audio the Pi worker POSTs to /ingest-audio.
+    """
+    try:
+        print("Trimming silence...", flush=True)
+        trimmed = trim_silence(audio)
+        if not trimmed:
+            print("Pure silence, skipping.", flush=True)
+            return
 
-def scanner_loop():
-    print("Scanner loop started...", flush=True)
-    while True:
-        try:
-            print("Capturing audio chunk...", flush=True)
-            audio = capture_chunk()
-            if not audio:
-                time.sleep(5)
-                continue
+        print("Uploading audio...", flush=True)
+        audio_url = upload_audio(trimmed)
 
-            print("Trimming silence...", flush=True)
-            trimmed = trim_silence(audio)
-            if not trimmed:
-                print("Pure silence, skipping.", flush=True)
-                continue
+        print("Transcribing...", flush=True)
+        transcript = transcribe(trimmed)
+        print(f"Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
 
-            print("Uploading audio...", flush=True)
-            audio_url = upload_audio(trimmed)
+        if len(transcript) < 15:
+            print("Too short, skipping.", flush=True)
+            if audio_url:
+                delete_audio(audio_url)
+            return
 
-            print("Transcribing...", flush=True)
-            transcript = transcribe(trimmed)
-            print(f"Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
+        print("Parsing...", flush=True)
+        parsed = parse_transcript(transcript)
 
-            if len(transcript) < 15:
-                print("Too short, skipping.", flush=True)
-                if audio_url:
-                    delete_audio(audio_url)
-                continue
+        if parsed:
+            save_incident(parsed, transcript, audio_url)
+        else:
+            print("No incident detected, cleaning up.", flush=True)
+            if audio_url:
+                delete_audio(audio_url)
 
-            print("Parsing...", flush=True)
-            parsed = parse_transcript(transcript)
+    except Exception as e:
+        import traceback
+        print(f"Processing error: {e}", flush=True)
+        traceback.print_exc()
 
-            if parsed:
-                save_incident(parsed, transcript, audio_url)
-            else:
-                print("No incident detected, cleaning up.", flush=True)
-                if audio_url:
-                    delete_audio(audio_url)
-
-        except Exception as e:
-            import traceback
-            print(f"Loop error: {e}", flush=True)
-            traceback.print_exc()
-            time.sleep(10)
-
-
-thread = threading.Thread(target=scanner_loop, daemon=True)
-thread.start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
