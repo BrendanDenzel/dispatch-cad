@@ -11,7 +11,7 @@ clients = []
 GROQ_API_KEY  = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL  = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY  = os.environ.get("SUPABASE_KEY")
-STREAM_URL    = os.environ.get("STREAM_URL")
+STREAM_URL    = os.environ.get("STREAM_URL")  # now expected to be a .m3u8 playlist URL
 CHUNK_SECONDS = 30
 MAX_INCIDENTS = 5000
 AUDIO_BUCKET  = "audio-clips"
@@ -123,21 +123,58 @@ def get_stats():
 # ─────────────────────────────────────────────
 
 def capture_chunk():
+    """
+    Pulls CHUNK_SECONDS of audio directly from the live HLS (.m3u8) stream
+    using ffmpeg. ffmpeg natively understands HLS: it fetches the playlist,
+    follows the segment (.ts/.aac) URLs as they roll forward, and stitches
+    them into one continuous output — this replaces the old approach of
+    reading raw bytes off a single long-lived MP3 HTTP connection, which
+    doesn't apply to a playlist-based stream.
+    """
+    out_path = None
     try:
-        resp = requests.get(STREAM_URL, stream=True, timeout=(10, 45))
-        buf  = io.BytesIO()
-        bytes_read = 0
-        target = 16000 * CHUNK_SECONDS
-        for chunk in resp.iter_content(chunk_size=4096):
-            buf.write(chunk)
-            bytes_read += len(chunk)
-            if bytes_read >= target:
-                break
-        resp.close()
-        return buf.getvalue()
+        out_path = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False).name
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-loglevel", "error",
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
+            "-i", STREAM_URL,
+            "-t", str(CHUNK_SECONDS),   # capture a fixed-length window
+            "-vn",
+            "-ac", "1",
+            "-ar", "16000",
+            "-acodec", "libmp3lame",
+            "-b:a", "64k",
+            out_path,
+        ]
+
+        # Give ffmpeg some headroom beyond CHUNK_SECONDS for playlist
+        # fetch + segment download overhead before we consider it hung.
+        result = subprocess.run(cmd, capture_output=True, timeout=CHUNK_SECONDS + 30)
+
+        if result.returncode != 0 or not os.path.exists(out_path) or os.path.getsize(out_path) < 1000:
+            err = result.stderr.decode(errors="ignore")[-300:] if result.stderr else ""
+            print(f"ffmpeg capture failed (code {result.returncode}): {err}", flush=True)
+            return None
+
+        with open(out_path, "rb") as f:
+            return f.read()
+
+    except subprocess.TimeoutExpired:
+        print("ffmpeg capture timed out", flush=True)
+        return None
     except Exception as e:
         print(f"Capture error: {e}", flush=True)
         return None
+    finally:
+        if out_path and os.path.exists(out_path):
+            try:
+                os.unlink(out_path)
+            except OSError:
+                pass
 
 
 def trim_silence(audio_bytes: bytes) -> bytes:
