@@ -1,6 +1,7 @@
 import os, time, threading, tempfile, json, subprocess
 from datetime import datetime
 from zoneinfo import ZoneInfo
+from urllib.parse import urljoin
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from groq import Groq
@@ -11,7 +12,10 @@ clients = []
 GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL   = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY   = os.environ.get("SUPABASE_KEY")
-INGEST_SECRET  = os.environ.get("INGEST_SECRET")  # shared secret the Pi must send
+INGEST_SECRET  = os.environ.get("INGEST_SECRET")   # still supported — Pi fallback path
+STREAM_URL     = os.environ.get("STREAM_URL")      # .m3u8 playlist URL — used by the local test loop
+CHUNK_SECONDS  = 30
+SEG_DURATION   = 4.032
 MAX_INCIDENTS  = 5000
 AUDIO_BUCKET   = "audio-clips"
 
@@ -119,12 +123,12 @@ def get_stats():
 
 
 # ─────────────────────────────────────────────
-# NEW: ingest endpoint — receives audio chunks pushed from the Pi
+# Fallback ingest endpoint — still here in case the local curl test
+# below gets blocked and you need to switch back to the Pi worker.
 # ─────────────────────────────────────────────
 
 @app.route("/ingest-audio", methods=["POST"])
 def ingest_audio():
-    # Simple shared-secret check so randoms on the internet can't spam this endpoint
     if not INGEST_SECRET or request.headers.get("X-Ingest-Secret") != INGEST_SECRET:
         return jsonify({"error": "unauthorized"}), 401
 
@@ -135,15 +139,119 @@ def ingest_audio():
     if not audio_bytes:
         return jsonify({"error": "empty audio"}), 400
 
-    # Process in a background thread so the Pi's upload request returns fast
-    # and doesn't have to wait on transcription/parsing to finish.
     threading.Thread(target=process_audio_chunk, args=(audio_bytes,), daemon=True).start()
     return jsonify({"status": "received", "bytes": len(audio_bytes)}), 202
 
 
 # ─────────────────────────────────────────────
-# Processing pipeline (same logic as before, now triggered by /ingest-audio
-# instead of by a local capture_chunk() loop)
+# TEST: local capture via curl-subprocess (same trick that worked on the Pi)
+# ─────────────────────────────────────────────
+
+def curl_fetch(url: str) -> bytes:
+    """Fetches a URL via curl as a subprocess, since Broadcastify's edge appears to block
+    Python's requests/urllib3 TLS fingerprint but allow curl's — even from the same network.
+    This tests whether that also holds true from Render's own IP."""
+    result = subprocess.run(
+        ["curl", "-sS", "-f", "--max-time", "15", url],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
+                            f"{result.stderr.decode(errors='ignore')[:200]}")
+    return result.stdout
+
+
+def fetch_playlist() -> list[str]:
+    text = curl_fetch(STREAM_URL).decode()
+    return [
+        urljoin(STREAM_URL, line.strip())
+        for line in text.splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+
+def download_segments(min_seconds: int = CHUNK_SECONDS) -> bytes:
+    needed = max(1, int(min_seconds / SEG_DURATION) + 1)
+    segments = fetch_playlist()[-needed:]
+
+    ts_bytes = b""
+    for url in segments:
+        try:
+            ts_bytes += curl_fetch(url)
+        except Exception as e:
+            print(f"[capture] segment fetch failed: {e}", flush=True)
+    return ts_bytes
+
+
+def convert_to_mp3(ts_bytes: bytes) -> bytes | None:
+    if not ts_bytes:
+        return None
+
+    in_path = tempfile.NamedTemporaryFile(suffix=".ts", delete=False).name
+    out_path = in_path.replace(".ts", ".mp3")
+    with open(in_path, "wb") as f:
+        f.write(ts_bytes)
+
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", in_path,
+        "-vn", "-ac", "1", "-ar", "16000",
+        "-acodec", "libmp3lame", "-b:a", "64k",
+        out_path,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=60)
+    finally:
+        os.unlink(in_path)
+
+    if result.returncode != 0 or not os.path.exists(out_path) or os.path.getsize(out_path) < 1000:
+        err = result.stderr.decode(errors="ignore")[-300:] if result.stderr else ""
+        print(f"[capture] ffmpeg convert failed: {err}", flush=True)
+        if os.path.exists(out_path):
+            os.unlink(out_path)
+        return None
+
+    with open(out_path, "rb") as f:
+        data = f.read()
+    os.unlink(out_path)
+    return data
+
+
+def capture_chunk() -> bytes | None:
+    try:
+        ts_bytes = download_segments()
+        return convert_to_mp3(ts_bytes)
+    except Exception as e:
+        print(f"[capture] error: {e}", flush=True)
+        return None
+
+
+def local_scanner_loop():
+    """Runs entirely on Render, testing whether curl from Render's IP can reach Broadcastify."""
+    if not STREAM_URL:
+        print("[local-loop] STREAM_URL not set — skipping local capture test, "
+              "relying on /ingest-audio (Pi) only.", flush=True)
+        return
+
+    print("[local-loop] Starting local curl-based capture test against:", STREAM_URL, flush=True)
+    while True:
+        try:
+            audio = capture_chunk()
+            if audio:
+                print(f"[local-loop] captured {len(audio)} bytes — processing", flush=True)
+                process_audio_chunk(audio)
+            else:
+                print("[local-loop] capture returned nothing, retrying in 5s", flush=True)
+                time.sleep(5)
+        except Exception as e:
+            import traceback
+            print(f"[local-loop] error: {e}", flush=True)
+            traceback.print_exc()
+            time.sleep(10)
+
+
+# ─────────────────────────────────────────────
+# Processing pipeline — shared by both /ingest-audio and the local test loop
 # ─────────────────────────────────────────────
 
 def trim_silence(audio_bytes: bytes) -> bytes:
@@ -304,12 +412,6 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
 
 
 def process_audio_chunk(audio: bytes):
-    """
-    Runs the full pipeline on one chunk of audio, regardless of where it
-    came from. Previously this was inline in scanner_loop() and fed by a
-    local capture_chunk() fetching Broadcastify directly. Now it's fed by
-    whatever audio the Pi worker POSTs to /ingest-audio.
-    """
     try:
         print("Trimming silence...", flush=True)
         trimmed = trim_silence(audio)
@@ -345,6 +447,9 @@ def process_audio_chunk(audio: bytes):
         print(f"Processing error: {e}", flush=True)
         traceback.print_exc()
 
+
+# Start the local capture test loop in the background (only does anything if STREAM_URL is set)
+threading.Thread(target=local_scanner_loop, daemon=True).start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
