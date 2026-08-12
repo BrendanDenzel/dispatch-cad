@@ -12,10 +12,9 @@ clients = []
 GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL   = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY   = os.environ.get("SUPABASE_KEY")
-INGEST_SECRET  = os.environ.get("INGEST_SECRET")   # still supported — Pi fallback path
-STREAM_URL     = os.environ.get("STREAM_URL")      # .m3u8 playlist URL — used by the local test loop
-CHUNK_SECONDS  = 90
-SEG_DURATION   = 4.032
+STREAM_URL     = os.environ.get("STREAM_URL")   # .m3u8 playlist URL
+CHUNK_SECONDS  = 90    # target seconds of actual audio per captured chunk
+SEG_DURATION   = 4.032 # seconds per HLS segment, from the playlist's #EXTINF value
 MAX_INCIDENTS  = 5000
 AUDIO_BUCKET   = "audio-clips"
 
@@ -123,34 +122,11 @@ def get_stats():
 
 
 # ─────────────────────────────────────────────
-# Fallback ingest endpoint — still here in case the local curl test
-# below gets blocked and you need to switch back to the Pi worker.
-# ─────────────────────────────────────────────
-
-@app.route("/ingest-audio", methods=["POST"])
-def ingest_audio():
-    if not INGEST_SECRET or request.headers.get("X-Ingest-Secret") != INGEST_SECRET:
-        return jsonify({"error": "unauthorized"}), 401
-
-    if "audio" not in request.files:
-        return jsonify({"error": "missing 'audio' file field"}), 400
-
-    audio_bytes = request.files["audio"].read()
-    if not audio_bytes:
-        return jsonify({"error": "empty audio"}), 400
-
-    threading.Thread(target=process_audio_chunk, args=(audio_bytes,), daemon=True).start()
-    return jsonify({"status": "received", "bytes": len(audio_bytes)}), 202
-
-
-# ─────────────────────────────────────────────
-# TEST: local capture via curl-subprocess (same trick that worked on the Pi)
+# Capture — curl-subprocess (bypasses Broadcastify's TLS-fingerprint block
+# on Python's requests/urllib3) + polling to build up a full-length chunk
 # ─────────────────────────────────────────────
 
 def curl_fetch(url: str) -> bytes:
-    """Fetches a URL via curl as a subprocess, since Broadcastify's edge appears to block
-    Python's requests/urllib3 TLS fingerprint but allow curl's — even from the same network.
-    This tests whether that also holds true from Render's own IP."""
     result = subprocess.run(
         ["curl", "-sS", "-f", "--max-time", "15", url],
         capture_output=True,
@@ -171,15 +147,39 @@ def fetch_playlist() -> list[str]:
 
 
 def download_segments(min_seconds: int = CHUNK_SECONDS) -> bytes:
-    needed = max(1, int(min_seconds / SEG_DURATION) + 1)
-    segments = fetch_playlist()[-needed:]
-
+    """
+    Broadcastify's live playlist only ever lists a handful of segments at once
+    (a rolling window, e.g. 6 segments ≈ 24s) — it does NOT grow to expose
+    min_seconds worth of history just because we ask for more. To actually
+    accumulate min_seconds of audio, we poll the playlist repeatedly over
+    time, track which segment URLs we've already grabbed, and keep collecting
+    new ones as they roll in until we hit the target duration.
+    """
+    seen = set()
     ts_bytes = b""
-    for url in segments:
+    collected_seconds = 0.0
+    deadline = time.time() + min_seconds + 30  # safety timeout
+
+    while collected_seconds < min_seconds and time.time() < deadline:
         try:
-            ts_bytes += curl_fetch(url)
+            segments = fetch_playlist()
         except Exception as e:
-            print(f"[capture] segment fetch failed: {e}", flush=True)
+            print(f"[capture] playlist fetch failed: {e}", flush=True)
+            time.sleep(SEG_DURATION)
+            continue
+
+        new_segments = [s for s in segments if s not in seen]
+        for url in new_segments:
+            try:
+                ts_bytes += curl_fetch(url)
+                seen.add(url)
+                collected_seconds += SEG_DURATION
+            except Exception as e:
+                print(f"[capture] segment fetch failed: {e}", flush=True)
+
+        if collected_seconds < min_seconds:
+            time.sleep(SEG_DURATION)  # wait for the next segment(s) to roll in
+
     return ts_bytes
 
 
@@ -226,32 +226,30 @@ def capture_chunk() -> bytes | None:
         return None
 
 
-def local_scanner_loop():
-    """Runs entirely on Render, testing whether curl from Render's IP can reach Broadcastify."""
+def scanner_loop():
     if not STREAM_URL:
-        print("[local-loop] STREAM_URL not set — skipping local capture test, "
-              "relying on /ingest-audio (Pi) only.", flush=True)
+        print("[scanner] STREAM_URL not set — nothing to capture.", flush=True)
         return
 
-    print("[local-loop] Starting local curl-based capture test against:", STREAM_URL, flush=True)
+    print("[scanner] Starting capture loop against:", STREAM_URL, flush=True)
     while True:
         try:
             audio = capture_chunk()
             if audio:
-                print(f"[local-loop] captured {len(audio)} bytes — processing", flush=True)
+                print(f"[scanner] captured {len(audio)} bytes — processing", flush=True)
                 process_audio_chunk(audio)
             else:
-                print("[local-loop] capture returned nothing, retrying in 5s", flush=True)
+                print("[scanner] capture returned nothing, retrying in 5s", flush=True)
                 time.sleep(5)
         except Exception as e:
             import traceback
-            print(f"[local-loop] error: {e}", flush=True)
+            print(f"[scanner] error: {e}", flush=True)
             traceback.print_exc()
             time.sleep(10)
 
 
 # ─────────────────────────────────────────────
-# Processing pipeline — shared by both /ingest-audio and the local test loop
+# Processing pipeline
 # ─────────────────────────────────────────────
 
 def trim_silence(audio_bytes: bytes) -> bytes:
@@ -448,8 +446,8 @@ def process_audio_chunk(audio: bytes):
         traceback.print_exc()
 
 
-# Start the local capture test loop in the background (only does anything if STREAM_URL is set)
-threading.Thread(target=local_scanner_loop, daemon=True).start()
+thread = threading.Thread(target=scanner_loop, daemon=True)
+thread.start()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
