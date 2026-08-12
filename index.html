@@ -24,6 +24,7 @@ html,body{height:100%;overflow:hidden;display:flex;flex-direction:column;backgro
 .tb-org{display:flex;flex-direction:column;line-height:1.2;}
 .tb-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.3px;}
 .tb-sub{font-size:9px;color:var(--text2);letter-spacing:1px;text-transform:uppercase;}
+.tb-name-short{display:none;}
 .tb-sep{width:1px;height:24px;background:var(--border2);flex-shrink:0;}
 .tb-pill{display:flex;align-items:center;gap:5px;background:var(--panel2);border:1px solid var(--border2);padding:3px 10px;border-radius:3px;}
 .tb-pill-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);}
@@ -31,6 +32,7 @@ html,body{height:100%;overflow:hidden;display:flex;flex-direction:column;backgro
 .tb-pill-dot.err{background:var(--red-bright);}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 .tb-pill-lbl{font-size:10px;color:var(--text2);font-family:var(--mono);letter-spacing:.5px;}
+.tb-pill-mobile{display:none;}
 .tb-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
 .tb-clock{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--blue-bright);letter-spacing:1.5px;}
 .tb-date{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:.5px;text-align:right;}
@@ -58,7 +60,7 @@ audio{display:none;}
 .stat-n{font-family:var(--mono);font-size:22px;font-weight:500;line-height:1.1;}
 .c-blue{color:var(--blue-bright);}.c-red{color:var(--red-bright);}.c-green{color:var(--green-bright);}.c-amber{color:var(--amber-bright);}
 .workspace{display:flex;flex:1;overflow:hidden;min-height:0;}
-.feed-col{display:flex;flex-direction:column;flex:1;min-width:0;}
+.feed-col{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;}
 .col-hdr{padding:8px 14px;border-bottom:1px solid var(--border);background:var(--panel);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
 .col-hdr-title{font-size:10px;font-weight:600;color:var(--text2);letter-spacing:1px;text-transform:uppercase;}
 .col-hdr-count{font-family:var(--mono);font-size:10px;color:var(--blue-bright);}
@@ -204,13 +206,14 @@ audio{display:none;}
 .mnb-lbl{font-size:9px;letter-spacing:.5px;text-transform:uppercase;font-family:var(--mono);}
 @media(max-width:860px){.side{display:none;}.stat .stat-lbl{font-size:8px;}.stat-n{font-size:18px;}}
 @media(max-width:580px){
-  html,body{overflow:auto;height:auto;}
+  .tb-pill-desktop{display:none;}.tb-pill-mobile{display:flex;}
   .topbar{padding:0 10px;}.tb-sub,.tb-date{display:none;}.tb-clock{font-size:14px;}
+  .tb-name-full{display:none;}.tb-name-short{display:inline;}
   .stats{overflow-x:auto;}.stat{min-width:68px;padding:6px 10px;}
-  .workspace{flex-direction:column;overflow:visible;flex:none;}
-  .feed-col{border-right:none;}.feed{height:auto;overflow:visible;}
+  .workspace{flex-direction:column;}
+  .feed-col{border-right:none;}
   .side{width:100%;display:none;border-left:none;border-top:1px solid var(--border);}
-  .side.mob-show{display:flex;max-height:50vh;}
+  .side.mob-show{display:flex;}
   .mob-nav{display:block;}.modal{max-height:95vh;}
 }
 @media(min-width:581px) and (max-width:860px){.stats .stat:nth-child(5){display:none;}}
@@ -221,12 +224,13 @@ audio{display:none;}
 <div class="topbar">
   <div class="tb-shield"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v6c0 5.25 3.75 10.15 9 11.35C17.25 23.15 21 18.25 21 13V7L12 2z"/></svg></div>
   <div class="tb-org">
-    <div class="tb-name">Amherst Police Department</div>
+    <div class="tb-name"><span class="tb-name-full">Amherst Police Department</span><span class="tb-name-short">Amherst Police</span></div>
     <div class="tb-sub">Computer Aided Dispatch · Erie County NY</div>
-  </div>
+</div>
   <div class="tb-sep"></div>
-  <div class="tb-pill"><div class="tb-pill-dot" id="conn-dot"></div><span class="tb-pill-lbl" id="conn-label">CONNECTING</span></div>
-  <div class="tb-pill"><div class="tb-pill-dot on"></div><span class="tb-pill-lbl">SYSTEM LIVE</span></div>
+  <div class="tb-pill tb-pill-desktop"><div class="tb-pill-dot" id="conn-dot"></div><span class="tb-pill-lbl" id="conn-label">CONNECTING</span></div>
+<div class="tb-pill tb-pill-desktop"><div class="tb-pill-dot on"></div><span class="tb-pill-lbl">SYSTEM LIVE</span></div>
+<div class="tb-pill tb-pill-mobile"><div class="tb-pill-dot" id="conn-dot-mobile"></div><span class="tb-pill-lbl">CONNECTION</span></div>
   <div class="tb-right">
     <div><div class="tb-clock" id="clock">00:00:00</div><div class="tb-date" id="dateline"></div></div>
   </div>
@@ -495,7 +499,7 @@ async function fetchStats() {
     document.getElementById('stat-total').textContent = s.total;
     document.getElementById('stat-high').textContent  = s.high;
     document.getElementById('stat-units').textContent = s.units;
-    document.getElementById('stat-last').textContent  = s.last_call;
+    document.getElementById('stat-last').textContent  = formatLastCall(s.last_call);
     document.getElementById('stat-rate').textContent  = s.rate;
     document.getElementById('incident-count').textContent = `${s.all_time} total · ${allIncidents.length} loaded`;
 
@@ -529,10 +533,25 @@ function showToast(inc) {
 function setConn(on) {
   document.getElementById('conn-dot').className = 'tb-pill-dot ' + (on ? 'on' : 'err');
   document.getElementById('conn-label').textContent = on ? 'CONNECTED' : 'OFFLINE';
+  document.getElementById('conn-dot-mobile').className = 'tb-pill-dot ' + (on ? 'on' : 'err');
 }
 
 // ── Priority class ─────────────────────────────────────────────────────────
 function pClass(p) { return (p||'unknown').toLowerCase(); }
+
+// ── Last call time formatting (military time on mobile only) ───────────────
+function formatLastCall(val) {
+  if (!val) return val;
+  if (window.innerWidth > 580) return val;
+  const m = String(val).match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+  if (!m) return val;
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  const isPM = m[3].toLowerCase() === 'pm';
+  if (isPM && h !== 12) h += 12;
+  if (!isPM && h === 12) h = 0;
+  return String(h).padStart(2, '0') + ':' + min;
+}
 
 // ── Incident ID ────────────────────────────────────────────────────────────
 function makeIncidentId(inc) {
