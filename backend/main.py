@@ -128,9 +128,10 @@ def get_stats():
 
 def curl_fetch(url: str) -> bytes:
     result = subprocess.run(
-        ["curl", "-sS", "-f", "--max-time", "15", url],
-        capture_output=True,
-    )
+    ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+     "-of", "default=noprint_wrappers=1:nokey=1", path],
+    capture_output=True, text=True, timeout=15
+)
     if result.returncode != 0:
         raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
                             f"{result.stderr.decode(errors='ignore')[:200]}")
