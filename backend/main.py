@@ -180,7 +180,37 @@ def download_segments(min_seconds: int = CHUNK_SECONDS) -> bytes:
         if collected_seconds < min_seconds:
             time.sleep(SEG_DURATION)  # wait for the next segment(s) to roll in
 
+    # NEW: log how many segments we actually grabbed and whether we hit the
+    # target or bailed out early via the deadline timeout.
+    hit_deadline = time.time() >= deadline
+    print(f"[capture] download_segments done: {len(seen)} segments, "
+          f"~{collected_seconds:.1f}s estimated (target {min_seconds}s), "
+          f"{len(ts_bytes)} raw bytes, "
+          f"{'HIT DEADLINE TIMEOUT' if hit_deadline else 'reached target normally'}",
+          flush=True)
+
     return ts_bytes
+
+
+def get_duration(audio_bytes: bytes) -> float:
+    """NEW: measure actual duration (in seconds) of audio bytes via ffprobe."""
+    if not audio_bytes:
+        return 0.0
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        f.write(audio_bytes)
+        path = f.name
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrapper=1:nokey=1", path],
+            capture_output=True, text=True, timeout=15
+        )
+        return float(result.stdout.strip())
+    except Exception as e:
+        print(f"[capture] ffprobe duration check failed: {e}", flush=True)
+        return -1.0
+    finally:
+        os.unlink(path)
 
 
 def convert_to_mp3(ts_bytes: bytes) -> bytes | None:
@@ -220,7 +250,13 @@ def convert_to_mp3(ts_bytes: bytes) -> bytes | None:
 def capture_chunk() -> bytes | None:
     try:
         ts_bytes = download_segments()
-        return convert_to_mp3(ts_bytes)
+        mp3 = convert_to_mp3(ts_bytes)
+        if mp3:
+            # NEW: log the real measured duration of the raw (pre-trim) mp3
+            dur = get_duration(mp3)
+            print(f"[capture] raw mp3 duration (pre-trim): {dur:.1f}s, "
+                  f"{len(mp3)} bytes", flush=True)
+        return mp3
     except Exception as e:
         print(f"[capture] error: {e}", flush=True)
         return None
@@ -416,6 +452,12 @@ def process_audio_chunk(audio: bytes):
         if not trimmed:
             print("Pure silence, skipping.", flush=True)
             return
+
+        # NEW: log measured durations before vs after trim so we can see
+        # exactly how much silenceremove is cutting.
+        raw_dur = get_duration(audio)
+        trimmed_dur = get_duration(trimmed)
+        print(f"[capture] trim result: {raw_dur:.1f}s raw -> {trimmed_dur:.1f}s trimmed", flush=True)
 
         print("Uploading audio...", flush=True)
         audio_url = upload_audio(trimmed)
