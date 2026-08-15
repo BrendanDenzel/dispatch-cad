@@ -815,7 +815,7 @@ Return raw JSON only. No markdown, no explanation, no code blocks."""
 def fire_parse_transcript(transcript: str):
     try:
         resp = fire_groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": FIRE_PARSE_PROMPT.format(transcript=transcript)}],
             max_tokens=300,
             temperature=0.1
