@@ -388,11 +388,12 @@ Return raw JSON only. No markdown, no explanation, no code blocks."""
 def parse_transcript(transcript: str):
     try:
         resp = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": PARSE_PROMPT.format(transcript=transcript)}],
-            max_tokens=300,
-            temperature=0.1
-        )
+    model="openai/gpt-oss-120b",
+    messages=[{"role": "user", "content": PARSE_PROMPT.format(transcript=transcript)}],
+    max_tokens=300,
+    temperature=0.1,
+    reasoning_effort="low"  # keep it quick since this is a simple extraction task
+)
         text = resp.choices[0].message.content.strip()
         if text.lower() == "null":
             return None
