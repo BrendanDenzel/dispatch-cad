@@ -506,6 +506,7 @@ FIRE_AUDIO_PREFIX  = "fire_clips"      # same AUDIO_BUCKET, separate folder from
 FIRE_CHUNK_SECONDS = 60     # target seconds of audio per fire/EMS chunk — shorter than police's 120s
 FIRE_INCIDENT_TABLE = "fire_incidents"
 FIRE_LOG_TABLE       = "fire_radio_log"
+GEOCODE_CACHE_TABLE  = "geocode_cache"   # server-side cache of resolved map coordinates
 
 
 # Repeated-transmission de-dupe: fire/EMS dispatch conventionally reads a
@@ -542,6 +543,57 @@ def get_fire_radio_log():
            .range(offset, offset + 49)
            .execute())
     return jsonify(res.data)
+
+
+# ─────────────────────────────────────────────
+# Geocode cache proxy — the frontend never talks to Supabase directly for
+# this. It hits these two routes; the Supabase URL/key stay server-side.
+# ─────────────────────────────────────────────
+
+def _geocode_key(loc: str) -> str:
+    return " ".join(loc.strip().lower().split())
+
+
+@app.route("/fire/geocode", methods=["GET"])
+def get_geocode_cache():
+    loc = request.args.get("location", "", type=str)
+    key = _geocode_key(loc)
+    if not key:
+        return jsonify({"error": "location required"}), 400
+    try:
+        res = (get_db().table(GEOCODE_CACHE_TABLE)
+               .select("lat,lng")
+               .eq("location_key", key)
+               .limit(1)
+               .execute())
+        if res.data:
+            return jsonify(res.data[0])
+        return jsonify(None), 404
+    except Exception as e:
+        print(f"[geocode-cache] get error: {e}", flush=True)
+        return jsonify(None), 500
+
+
+@app.route("/fire/geocode", methods=["POST"])
+def save_geocode_cache():
+    body = request.get_json(silent=True) or {}
+    loc  = body.get("location", "")
+    lat  = body.get("lat")
+    lng  = body.get("lng")
+    key  = _geocode_key(loc)
+    if not key or lat is None or lng is None:
+        return jsonify({"error": "location, lat, lng required"}), 400
+    try:
+        get_db().table(GEOCODE_CACHE_TABLE).upsert({
+            "location_key":      key,
+            "original_location": loc.strip(),
+            "lat":               lat,
+            "lng":               lng,
+        }).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[geocode-cache] save error: {e}", flush=True)
+        return jsonify({"ok": False}), 500
 
 
 @app.route("/fire/stream")
