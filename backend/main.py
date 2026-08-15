@@ -6,6 +6,7 @@ from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
+from collections import deque
 
 clients = []
 
@@ -504,10 +505,13 @@ STREAM_URL2         = os.environ.get("STREAM_URL2")   # fire/EMS .m3u8 playlist 
 FIRE_MAX_INCIDENTS = 5000
 FIRE_MAX_LOG_ROWS  = 5000
 FIRE_AUDIO_PREFIX  = "fire_clips"      # same AUDIO_BUCKET, separate folder from police "clips/"
-FIRE_CHUNK_SECONDS = 60     # target seconds of audio per fire/EMS chunk — shorter than police's 120s
 FIRE_INCIDENT_TABLE = "fire_incidents"
 FIRE_LOG_TABLE       = "fire_radio_log"
 GEOCODE_CACHE_TABLE  = "geocode_cache"   # server-side cache of resolved map coordinates
+FIRE_SEG_SILENCE_DB      = -40.0  # ffmpeg mean_volume threshold; segments quieter than this = silence
+FIRE_PREROLL_SEGMENTS    = 1      # keep this many segments (~4s) buffered before a trigger, so we don't clip the start of a call
+FIRE_HANGOVER_SEGMENTS   = 1      # end capture after this many consecutive silent segments (~4s of quiet)
+FIRE_MAX_CLIP_SEGMENTS   = 15     # safety cap (~60s) in case a call/noise never goes quiet
 
 
 # Repeated-transmission de-dupe: fire/EMS dispatch conventionally reads a
@@ -520,6 +524,30 @@ _fire_recent_calls = []  # list of (timestamp, normalized_text)
 _fire_recent_calls_lock = threading.Lock()
 
 fire_groq_client = Groq(api_key=GROQ_API_KEY_BACKUP)
+
+def fire_segment_mean_volume_db(seg_bytes: bytes) -> float:
+    """Returns the mean volume (dB) of a single ~4s TS segment via ffmpeg's
+    volumedetect filter. Used as the voice-activity trigger — cheap enough
+    to run on every segment as it arrives."""
+    if not seg_bytes:
+        return -99.0
+    with tempfile.NamedTemporaryFile(suffix=".ts", delete=False) as f:
+        f.write(seg_bytes)
+        path = f.name
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-i", path, "-af", "volumedetect", "-f", "null", "-"],
+            capture_output=True, text=True, timeout=15
+        )
+        for line in result.stderr.splitlines():
+            if "mean_volume:" in line:
+                return float(line.split("mean_volume:")[1].strip().split(" ")[0])
+        return -99.0
+    except Exception as e:
+        print(f"[fire-vad] volume check failed: {e}", flush=True)
+        return -99.0
+    finally:
+        os.unlink(path)
 
 
 @app.route("/fire/incidents")
@@ -683,76 +711,89 @@ def fire_fetch_playlist() -> list[str]:
     ]
 
 
-def fire_download_segments(min_seconds: int = FIRE_CHUNK_SECONDS) -> bytes:
-    seen = set()
-    ts_bytes = b""
-    collected_seconds = 0.0
-    deadline = time.time() + min_seconds + 30
-
-    while collected_seconds < min_seconds and time.time() < deadline:
-        try:
-            segments = fire_fetch_playlist()
-        except Exception as e:
-            print(f"[fire-capture] playlist fetch failed: {e}", flush=True)
-            time.sleep(SEG_DURATION)
-            continue
-
-        new_segments = [s for s in segments if s not in seen]
-        for url in new_segments:
-            try:
-                ts_bytes += curl_fetch(url)
-                seen.add(url)
-                collected_seconds += SEG_DURATION
-            except Exception as e:
-                print(f"[fire-capture] segment fetch failed: {e}", flush=True)
-
-        if collected_seconds < min_seconds:
-            time.sleep(SEG_DURATION)
-
-    hit_deadline = time.time() >= deadline
-    print(f"[fire-capture] download_segments done: {len(seen)} segments, "
-          f"~{collected_seconds:.1f}s estimated (target {min_seconds}s), "
-          f"{len(ts_bytes)} raw bytes, "
-          f"{'HIT DEADLINE TIMEOUT' if hit_deadline else 'reached target normally'}",
-          flush=True)
-
-    return ts_bytes
-
-
-def fire_capture_chunk() -> bytes | None:
-    try:
-        ts_bytes = fire_download_segments()
-        mp3 = convert_to_mp3(ts_bytes)
-        if mp3:
-            dur = get_duration(mp3)
-            print(f"[fire-capture] raw mp3 duration (pre-trim): {dur:.1f}s, "
-                  f"{len(mp3)} bytes", flush=True)
-        return mp3
-    except Exception as e:
-        print(f"[fire-capture] error: {e}", flush=True)
-        return None
-
-
 def fire_scanner_loop():
+    """Voice-activated capture with pre-roll. Instead of grabbing a fixed
+    60s window and hoping a call doesn't straddle the boundary, this watches
+    each ~4s segment as it rolls in and only starts accumulating a clip once
+    it actually hears audio — seeded with a bit of pre-roll so the start of
+    the call isn't clipped. It keeps capturing until a run of silent
+    segments (hangover) says the call is over, then hands the whole clip
+    off to fire_process_audio_chunk untouched, same as before."""
     if not STREAM_URL2:
         print("[fire-scanner] STREAM_URL2 not set — nothing to capture.", flush=True)
         return
 
-    print("[fire-scanner] Starting capture loop against:", STREAM_URL2, flush=True)
+    print("[fire-scanner] Starting VAD capture loop against:", STREAM_URL2, flush=True)
+
+    seen_urls = deque(maxlen=500)
+    seen_set = set()
+    preroll_buffer = deque(maxlen=FIRE_PREROLL_SEGMENTS)
+    capture_buffer = []
+    capturing = False
+    silent_run = 0
+
     while True:
         try:
-            audio = fire_capture_chunk()
-            if audio:
-                print(f"[fire-scanner] captured {len(audio)} bytes — processing", flush=True)
-                fire_process_audio_chunk(audio)
-            else:
-                print("[fire-scanner] capture returned nothing, retrying in 5s", flush=True)
-                time.sleep(5)
+            segments = fire_fetch_playlist()
         except Exception as e:
-            import traceback
-            print(f"[fire-scanner] error: {e}", flush=True)
-            traceback.print_exc()
-            time.sleep(10)
+            print(f"[fire-scanner] playlist fetch failed: {e}", flush=True)
+            time.sleep(SEG_DURATION)
+            continue
+
+        new_segments = [s for s in segments if s not in seen_set]
+        if not new_segments:
+            time.sleep(SEG_DURATION)
+            continue
+
+        for url in new_segments:
+            seen_urls.append(url)
+            seen_set = set(seen_urls)
+
+            try:
+                seg_bytes = curl_fetch(url)
+            except Exception as e:
+                print(f"[fire-scanner] segment fetch failed: {e}", flush=True)
+                continue
+
+            vol_db = fire_segment_mean_volume_db(seg_bytes)
+            has_audio = vol_db > FIRE_SEG_SILENCE_DB
+
+            if not capturing:
+                if has_audio:
+                    print(f"[fire-scanner] audio detected ({vol_db:.1f}dB) — starting capture", flush=True)
+                    capture_buffer = list(preroll_buffer) + [seg_bytes]  # true pre-roll + trigger segment
+                    capturing = True
+                    silent_run = 0
+                else:
+                    preroll_buffer.append(seg_bytes)
+                continue
+
+            # capturing
+            capture_buffer.append(seg_bytes)
+            silent_run = 0 if has_audio else silent_run + 1
+
+            ended     = silent_run >= FIRE_HANGOVER_SEGMENTS
+            too_long  = len(capture_buffer) >= FIRE_MAX_CLIP_SEGMENTS
+
+            if ended or too_long:
+                reason = "hit max length" if too_long else "went quiet"
+                print(f"[fire-scanner] capture ended ({reason}), {len(capture_buffer)} segments — processing", flush=True)
+                ts_bytes = b"".join(capture_buffer)
+                try:
+                    mp3 = convert_to_mp3(ts_bytes)
+                    if mp3:
+                        dur = get_duration(mp3)
+                        print(f"[fire-scanner] clip duration: {dur:.1f}s, {len(mp3)} bytes", flush=True)
+                        fire_process_audio_chunk(mp3)
+                except Exception as e:
+                    import traceback
+                    print(f"[fire-scanner] error: {e}", flush=True)
+                    traceback.print_exc()
+
+                capture_buffer = []
+                capturing = False
+                silent_run = 0
+                preroll_buffer.clear()
 
 
 def fire_upload_audio(audio_bytes: bytes) -> str | None:
