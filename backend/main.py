@@ -858,17 +858,20 @@ def fire_parse_transcript(transcript: str):
         resp = fire_groq_client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": FIRE_PARSE_PROMPT.format(transcript=transcript)}],
-            max_tokens=300,
-            temperature=0.1
+            max_tokens=600,
+            temperature=0.1,
+            reasoning_effort="low"
         )
-        text = resp.choices[0].message.content.strip()
+        text = (resp.choices[0].message.content or "").strip()
+        if not text:
+            print(f"[fire] Parse warning: empty response, finish_reason={resp.choices[0].finish_reason}", flush=True)
+            return None
         if text.lower() == "null":
             return None
         return json.loads(text.replace("```json", "").replace("```", "").strip())
     except Exception as e:
         print(f"[fire] Parse error: {e}", flush=True)
         return None
-
 
 def _fire_normalize(text: str) -> str:
     return " ".join(text.strip().lower().split())
