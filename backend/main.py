@@ -503,8 +503,10 @@ STREAM_URL2         = os.environ.get("STREAM_URL2")   # fire/EMS .m3u8 playlist 
 FIRE_MAX_INCIDENTS = 5000
 FIRE_MAX_LOG_ROWS  = 5000
 FIRE_AUDIO_PREFIX  = "fire_clips"      # same AUDIO_BUCKET, separate folder from police "clips/"
+FIRE_CHUNK_SECONDS = 60     # target seconds of audio per fire/EMS chunk — shorter than police's 120s
 FIRE_INCIDENT_TABLE = "fire_incidents"
 FIRE_LOG_TABLE       = "fire_radio_log"
+
 
 # Repeated-transmission de-dupe: fire/EMS dispatch conventionally reads a
 # call out twice. We keep a short rolling memory of recent call text and
@@ -628,7 +630,7 @@ def fire_fetch_playlist() -> list[str]:
     ]
 
 
-def fire_download_segments(min_seconds: int = CHUNK_SECONDS) -> bytes:
+def fire_download_segments(min_seconds: int = FIRE_CHUNK_SECONDS) -> bytes:
     seen = set()
     ts_bytes = b""
     collected_seconds = 0.0
