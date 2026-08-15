@@ -324,7 +324,7 @@ audio{display:none;}
   <span class="sb-onair" id="sb-onair">ON AIR</span>
   <button class="sb-btn" id="sb-btn" onclick="toggleAudio()">▶ Monitor</button>
   <!-- Point this at your fire/EMS feed's HLS playlist URL (the live-listen source, not STREAM_URL2 the backend polls) -->
-  <audio id="scanner-audio"><source src="https://hls-o1.broadcastify.com/s1/feed/1775/playlist.m3u8" type="audio/mpeg"></audio>
+  <audio id="scanner-audio"></audio>
 </div>
 
 <div class="stats">
@@ -391,6 +391,7 @@ audio{display:none;}
 <div class="map-overlay" id="map-overlay"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin=""></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <script>
 // ── Point this at wherever fire_server.py is deployed (a separate service
 // from the police dispatch-cad backend). ─────────────────────────────────
@@ -442,7 +443,12 @@ const KEYWORD_BANK = {
   "edgar road": "Eggert Road",
   "1425 edgar": "1425 Eggert Road",
   "APT": "APD",
-  "APZ": "APD"
+  "APZ": "APD",
+  "tigers": "Eggertsville",
+  "sam hushfire": "Amherst Fire",
+  "eggers": "Eggertsville",
+  "letter": "Ladder",
+  "and press to fire": "Amherst Fire",
 };
 
 function applyKeywordBank(text) {
@@ -518,11 +524,34 @@ function updateClock() {
 setInterval(updateClock, 1000); updateClock();
 
 // ── Scanner audio toggle ───────────────────────────────────────────────────
+const STREAM_HLS_URL = "https://hls-o1.broadcastify.com/s1/feed/1775/playlist.m3u8";
+let hlsInstance = null;
+
+function initScannerAudio() {
+  const audio = document.getElementById('scanner-audio');
+
+  if (window.Hls && Hls.isSupported()) {
+    hlsInstance = new Hls({
+      liveSyncDurationCount: 3,
+      maxBufferLength: 15,
+    });
+    hlsInstance.loadSource(STREAM_HLS_URL);
+    hlsInstance.attachMedia(audio);
+  } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+    audio.src = STREAM_HLS_URL;
+  } else {
+    console.error('HLS not supported in this browser');
+  }
+}
+
 function toggleAudio() {
   const a = document.getElementById('scanner-audio');
   const btn = document.getElementById('sb-btn');
   const viz = document.getElementById('sb-viz');
   const oa  = document.getElementById('sb-onair');
+
+  if (!hlsInstance && !a.src) initScannerAudio();
+
   if (a.paused) {
     a.play().catch(()=>{});
     btn.textContent='■ Stop'; btn.classList.add('on');
@@ -637,7 +666,7 @@ function renderRow(inc) {
 // Radio log rows are flat, timestamped lines — not grouped by incident.
 function renderLogEntry(entry) {
   const lines = splitTranscript(applyKeywordBank(entry.text || ''));
-  return lines.map(l => `<div class="tx-line-row">
+  return lines.slice().reverse().map(l => `<div class="tx-line-row">
       <span class="tx-line-time">${escHtml(entry.time_str||'')}</span>
       <span class="tx-line-text">${escHtml(l)}</span>
     </div>`).join('');
