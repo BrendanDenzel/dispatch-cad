@@ -3,14 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Amherst PD — CAD</title>
+<title>Amherst Fire Control — CAD</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin=""/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
   --bg:#0c0e12;--panel:#13161c;--panel2:#191d24;--panel3:#1f242e;
   --border:#252a35;--border2:#2e3440;
-  --blue:#2d7dd2;--blue-bright:#4a9eff;--blue-dim:rgba(45,125,210,0.1);
+  --blue:#c0392b;--blue-bright:#e74c3c;--blue-dim:rgba(192,57,43,0.1);
   --red:#c0392b;--red-bright:#e74c3c;--red-dim:rgba(192,57,43,0.1);
   --amber:#d68910;--amber-bright:#f39c12;--amber-dim:rgba(214,137,16,0.1);
   --green:#1e8449;--green-bright:#27ae60;--green-dim:rgba(30,132,73,0.1);
@@ -70,7 +71,7 @@ audio{display:none;}
 .irow{display:grid;grid-template-columns:3px 1fr auto;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;}
 .irow:hover{background:var(--panel2);}
 .irow.new-in{animation:flash .7s ease-out;}
-@keyframes flash{0%{background:rgba(45,125,210,.12)}100%{background:transparent}}
+@keyframes flash{0%{background:rgba(231,76,60,.12)}100%{background:transparent}}
 .irow-bar{width:3px;align-self:stretch;background:var(--border2);}
 .irow-bar.high{background:var(--red-bright);}.irow-bar.medium{background:var(--amber-bright);}.irow-bar.low{background:var(--green-bright);}.irow-bar.unknown{background:var(--text3);}
 .irow-body{padding:10px 12px;min-width:0;}
@@ -85,20 +86,17 @@ audio{display:none;}
 .pri-tag.medium{background:var(--amber-dim);color:var(--amber-bright);border-color:rgba(243,156,18,.2);}
 .pri-tag.low{background:var(--green-dim);color:var(--green-bright);border-color:rgba(39,174,96,.2);}
 .pri-tag.unknown{background:rgba(74,85,104,.15);color:var(--text3);border-color:var(--border);}
-.unit-chip{font-family:var(--mono);font-size:9px;padding:2px 6px;background:var(--blue-dim);border:1px solid rgba(45,125,210,.2);color:var(--blue-bright);border-radius:2px;}
-/* audio icon badge on row */
+.unit-chip{font-family:var(--mono);font-size:9px;padding:2px 6px;background:var(--blue-dim);border:1px solid rgba(231,76,60,.2);color:var(--blue-bright);border-radius:2px;}
 .audio-badge{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:9px;padding:2px 6px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);color:var(--green-bright);border-radius:2px;}
 .audio-badge svg{width:9px;height:9px;fill:currentColor;}
 .irow-notes{font-size:11px;color:var(--text2);margin-top:4px;line-height:1.4;}
 .irow-arr{padding:10px 10px 10px 0;display:flex;align-items:center;color:var(--text3);font-size:12px;}
 .side{width:290px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid var(--border);background:var(--panel);height:100%;min-height:0;}
 .tx-feed{flex:1;overflow-y:auto;min-height:0;}.tx-feed::-webkit-scrollbar{width:3px;}.tx-feed::-webkit-scrollbar-thumb{background:var(--border2);}
-.tx-entry{padding:8px 12px;border-bottom:1px solid var(--border);animation:fadeUp .35s ease-out;}
+.tx-line-row{padding:5px 12px;border-bottom:1px solid var(--border);animation:fadeUp .35s ease-out;display:flex;gap:8px;align-items:baseline;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
-.tx-time{font-family:var(--mono);font-size:9px;color:var(--text3);margin-bottom:3px;}
-.tx-bubble{background:var(--panel2);border:1px solid var(--border);border-radius:2px 6px 6px 6px;padding:6px 9px;}
-.tx-line{font-family:var(--mono);font-size:12px;color:var(--text);line-height:1.6;display:block;padding:1px 0;}
-.tx-line+.tx-line{border-top:1px solid rgba(255,255,255,.04);margin-top:3px;padding-top:4px;}
+.tx-line-time{font-family:var(--mono);font-size:9px;color:var(--text3);flex-shrink:0;white-space:nowrap;}
+.tx-line-text{font-family:var(--mono);font-size:11.5px;color:var(--text2);line-height:1.5;}
 .bkdn{border-top:1px solid var(--border);padding:10px 12px;flex-shrink:0;}
 .bkdn-ttl{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
 .bkdn-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
@@ -158,14 +156,14 @@ audio{display:none;}
 .m-table td:first-child{color:var(--text2);width:140px;font-weight:500;padding-right:12px;}
 .m-table td:last-child{color:var(--text);font-family:var(--mono);font-size:11px;}
 .m-chips{display:flex;gap:5px;flex-wrap:wrap;}
-.m-chip{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:2px;background:var(--blue-dim);border:1px solid rgba(45,125,210,.2);color:var(--blue-bright);}
+.m-chip{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:2px;background:var(--blue-dim);border:1px solid rgba(231,76,60,.2);color:var(--blue-bright);}
 .m-chip.red{background:var(--red-dim);border-color:rgba(231,76,60,.2);color:var(--red-bright);}
 .m-chip.amber{background:var(--amber-dim);border-color:rgba(243,156,18,.2);color:var(--amber-bright);}
 .m-chip.green{background:var(--green-dim);border-color:rgba(39,174,96,.2);color:var(--green-bright);}
 .m-id{font-family:var(--mono);font-size:10px;color:var(--text3);}
 .m-pri{display:inline-flex;align-items:center;gap:6px;}
 .m-pri-dot{width:8px;height:8px;border-radius:50%;}
-.loc-link{color:var(--blue-bright);text-decoration:none;font-family:var(--mono);font-size:11px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;border-bottom:1px solid rgba(74,158,255,.3);padding-bottom:1px;transition:border-color .15s;}
+.loc-link{color:var(--blue-bright);text-decoration:none;font-family:var(--mono);font-size:11px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;border-bottom:1px solid rgba(231,76,60,.3);padding-bottom:1px;transition:border-color .15s;}
 .loc-link:hover{border-color:var(--blue-bright);}
 .loc-link svg{width:11px;height:11px;fill:currentColor;opacity:.7;flex-shrink:0;}
 .map-container{margin-top:8px;border:1px solid var(--border2);border-radius:3px;overflow:hidden;height:200px;background:var(--panel3);display:none;}
@@ -176,23 +174,9 @@ audio{display:none;}
 .m-tx-line{font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.65;display:block;padding:2px 0;}
 .m-tx-line+.m-tx-line{border-top:1px solid rgba(255,255,255,.05);margin-top:4px;padding-top:6px;}
 
-/* ── Audio Player ── */
-.audio-player{
-  background:var(--panel2);
-  border:1px solid var(--border2);
-  border-radius:3px;
-  padding:10px 14px;
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
+.audio-player{background:var(--panel2);border:1px solid var(--border2);border-radius:3px;padding:10px 14px;display:flex;flex-direction:column;gap:8px;}
 .audio-player-row{display:flex;align-items:center;gap:10px;}
-.ap-play{
-  width:32px;height:32px;border-radius:50%;
-  background:var(--blue);border:none;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;transition:background .15s;
-}
+.ap-play{width:32px;height:32px;border-radius:50%;background:var(--blue);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s;}
 .ap-play:hover{background:var(--blue-bright);}
 .ap-play svg{width:13px;height:13px;fill:white;margin-left:2px;}
 .ap-play.playing svg{margin-left:0;}
@@ -209,13 +193,6 @@ audio{display:none;}
 .ap-no-audio{font-family:var(--mono);font-size:11px;color:var(--text3);padding:8px 0;display:flex;align-items:center;gap:6px;}
 .ap-no-audio svg{width:14px;height:14px;stroke:var(--text3);fill:none;stroke-width:1.5;}
 
-/* Decoded term tooltip */
-.decoded{color:var(--blue-bright);border-bottom:1px solid rgba(74,158,255,.5);cursor:pointer;position:relative;display:inline;font-family:var(--mono);}
-.decoded:hover .decoded-tip{display:block;}
-.decoded-tip{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a1f2a;border:1px solid var(--border2);border-radius:3px;padding:4px 8px;white-space:nowrap;font-size:10px;color:var(--text2);font-family:var(--mono);z-index:100;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.4);}
-.decoded-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1a1f2a;}
-
-/* Mobile */
 .mob-nav{display:none;border-top:1px solid var(--border);background:var(--panel);flex-shrink:0;}
 .mob-nav-inner{display:flex;}
 .mnb{flex:1;padding:9px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;background:transparent;border:none;cursor:pointer;color:var(--text3);border-top:2px solid transparent;transition:all .15s;}
@@ -237,36 +214,79 @@ audio{display:none;}
   .svc-toggle-mobile{display:block;}
 }
 @media(min-width:581px) and (max-width:860px){.stats .stat:nth-child(5){display:none;}}
+
+/* Map view button — desktop topbar */
+.map-view-btn{display:flex;align-items:center;gap:6px;margin-left:10px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:6px 12px;border-radius:4px;cursor:pointer;font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.3px;transition:all .15s;flex-shrink:0;}
+.map-view-btn svg{width:13px;height:13px;fill:currentColor;flex-shrink:0;}
+.map-view-btn:hover{border-color:var(--blue);color:var(--blue-bright);}
+
+/* Map overlay — desktop popup, also driven by the mobile "Map" tab */
+.map-overlay{display:none;position:fixed;inset:0;background:var(--bg);z-index:7000;flex-direction:column;}
+.map-overlay.open{display:flex;}
+.map-overlay-hdr{display:flex;align-items:center;gap:14px;padding:12px 18px;background:var(--panel);border-bottom:2px solid var(--blue);flex-shrink:0;flex-wrap:wrap;}
+.map-overlay-title-wrap{display:flex;flex-direction:column;line-height:1.3;}
+.map-overlay-title{font-size:15px;font-weight:700;color:#fff;}
+.map-overlay-sub{font-size:10px;color:var(--text2);font-family:var(--mono);letter-spacing:.5px;}
+.map-legend{display:flex;align-items:center;gap:10px;margin-left:auto;}
+.map-legend-item{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;}
+.map-legend-item .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.map-legend-item .dot.high{background:var(--red-bright);}
+.map-legend-item .dot.medium{background:var(--amber-bright);}
+.map-legend-item .dot.low{background:var(--green-bright);}
+.map-legend-item .dot.unknown{background:var(--text3);}
+#big-map{flex:1;min-height:0;background:var(--panel3);}
+.map-panel{display:flex;flex-direction:column;flex:1;min-height:0;width:100%;height:100%;}
+#view-map{display:none;}
+.leaflet-popup-content-wrapper{background:var(--panel2)!important;color:var(--text)!important;border:1px solid var(--border2);border-radius:4px!important;}
+.leaflet-popup-tip{background:var(--panel2)!important;}
+.leaflet-container{background:var(--panel3)!important;}
+.leaflet-control-attribution{background:rgba(19,22,28,.8)!important;color:var(--text3)!important;font-size:9px!important;}
+.leaflet-control-attribution a{color:var(--text2)!important;}
+.leaflet-control-zoom a{background:var(--panel2)!important;color:var(--text)!important;border-color:var(--border2)!important;}
+.leaflet-control-zoom a:hover{background:var(--panel3)!important;}
+@media(max-width:580px){
+  .map-view-btn{display:none;}
+  .map-overlay-hdr{padding:10px 12px;gap:8px;}
+  .map-overlay-title{font-size:13px;}
+  .map-legend{gap:7px;}
+  .map-close-btn{display:none;}
+  .map-overlay{padding-bottom:0;}
+}
 </style>
 </head>
 <body>
 
 <div class="topbar">
-  <div class="tb-shield"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v6c0 5.25 3.75 10.15 9 11.35C17.25 23.15 21 18.25 21 13V7L12 2z"/></svg></div>
+  <div class="tb-shield"><svg viewBox="0 0 24 24"><path d="M12 2C9 6 6 9 6 13a6 6 0 0012 0c0-2-1-3.5-2-5 .3 2-.7 3-1.5 3.3.6-2.3-.3-4.6-2.5-7.3z"/></svg></div>
   <div class="tb-org">
-    <div class="tb-name"><span class="tb-name-full">Amherst Police Department</span><span class="tb-name-short">Amherst Police</span></div>
+    <div class="tb-name"><span class="tb-name-full">Amherst Fire Control</span><span class="tb-name-short">Amherst Fire</span></div>
     <div class="tb-sub">Computer Aided Dispatch · Erie County NY</div>
-</div>
+  </div>
   <div class="tb-sep"></div>
   <div class="tb-pill tb-pill-desktop"><div class="tb-pill-dot" id="conn-dot"></div><span class="tb-pill-lbl" id="conn-label">CONNECTING</span></div>
-<div class="tb-pill tb-pill-desktop"><div class="tb-pill-dot on"></div><span class="tb-pill-lbl">SYSTEM LIVE</span></div>
-<div class="tb-pill tb-pill-mobile"><div class="tb-pill-dot" id="conn-dot-mobile"></div><span class="tb-pill-lbl">CONNECTION</span></div>
+  <div class="tb-pill tb-pill-desktop"><div class="tb-pill-dot on"></div><span class="tb-pill-lbl">SYSTEM LIVE</span></div>
+  <div class="tb-pill tb-pill-mobile"><div class="tb-pill-dot" id="conn-dot-mobile"></div><span class="tb-pill-lbl">CONNECTION</span></div>
   <div class="tb-right">
   <div><div class="tb-clock" id="clock">00:00:00</div><div class="tb-date" id="dateline"></div></div>
   <div class="svc-toggle">
-  <a href="index.html" class="police active">Police</a>
-  <a href="fire.html" class="fire">Fire</a>
+  <a href="index.html" class="police">Police</a>
+  <a href="fire.html" class="fire active">Fire</a>
 </div>
+  <button class="map-view-btn" onclick="openMapOverlay()" title="View incident map">
+    <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+    <span>View Map</span>
+  </button>
 </div>
 </div>
 
 <div class="scanbar">
   <span class="sb-tag">Scanner</span>
-  <span class="sb-freq">P25 · AMHERST PD</span>
+  <span class="sb-freq">6-CH · AMHERST FIRE CONTROL</span>
   <div class="sb-viz" id="sb-viz"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
   <span class="sb-onair" id="sb-onair">ON AIR</span>
   <button class="sb-btn" id="sb-btn" onclick="toggleAudio()">▶ Monitor</button>
-  <audio id="scanner-audio"><source src="https://hls-o1.broadcastify.com/s1/feed/40857/playlist.m3u8" type="audio/mpeg"></audio>
+  <!-- Point this at your fire/EMS feed's HLS playlist URL (the live-listen source, not STREAM_URL2 the backend polls) -->
+  <audio id="scanner-audio"><source src="https://hls-o1.broadcastify.com/s1/feed/1775/playlist.m3u8" type="audio/mpeg"></audio>
 </div>
 
 <div class="stats">
@@ -279,35 +299,40 @@ audio{display:none;}
 
 <div class="workspace" id="workspace">
   <div class="feed-col" id="view-feed">
-    <div class="col-hdr"><span class="col-hdr-title">Active Incidents</span><span class="col-hdr-count" id="incident-count">0 calls</span></div>
+    <div class="col-hdr"><span class="col-hdr-title">Active Calls</span><span class="col-hdr-count" id="incident-count">0 calls</span></div>
     <div class="feed" id="incident-feed">
       <div class="empty"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.0 2.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><div class="empty-msg">Awaiting Dispatch</div></div>
     </div>
   </div>
   <div class="side" id="view-side">
     <div class="col-hdr"><span class="col-hdr-title">Radio Log</span></div>
-    <div class="bkdn"><div class="bkdn-ttl">Incident Types</div><div id="breakdown-list"></div></div>
+    <div class="bkdn"><div class="bkdn-ttl">Call Types</div><div id="breakdown-list"></div></div>
     <div class="tx-feed" id="transcript-feed"></div>
   </div>
+  <div class="feed-col" id="view-map"></div>
 </div>
 
 <div class="mob-nav">
   <div class="mob-nav-inner">
     <button class="mnb active" id="mnb-inc" onclick="mobTab('feed')">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
-      <span class="mnb-lbl">Incidents</span>
+      <span class="mnb-lbl">Calls</span>
     </button>
     <button class="mnb" id="mnb-rad" onclick="mobTab('side')">
       <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
       <span class="mnb-lbl">Radio</span>
+    </button>
+    <button class="mnb" id="mnb-map" onclick="openMapOverlay()">
+      <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      <span class="mnb-lbl">Map</span>
     </button>
   </div>
 </div>
 
 <div class="svc-toggle-mobile">
   <div class="svc-toggle-mobile-inner">
-    <a href="index.html" class="police active">Police</a>
-    <a href="fire.html" class="fire">Fire</a>
+    <a href="index.html" class="police">Police</a>
+    <a href="fire.html" class="fire active">Fire</a>
   </div>
 </div>
 
@@ -316,7 +341,7 @@ audio{display:none;}
     <div class="modal-hdr">
       <div class="modal-hdr-left">
         <div class="modal-hdr-bar" id="modal-bar"></div>
-        <div><div class="modal-title" id="modal-title">Incident</div><div class="modal-sub" id="modal-sub"></div></div>
+        <div><div class="modal-title" id="modal-title">Call</div><div class="modal-sub" id="modal-sub"></div></div>
       </div>
       <button class="modal-close" onclick="closeModalDirect()">✕</button>
     </div>
@@ -324,19 +349,29 @@ audio{display:none;}
   </div>
 </div>
 
+<div class="map-overlay" id="map-overlay"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin=""></script>
 <script>
-const API = 'https://dispatch-cad.onrender.com/incidents';
+// ── Point this at wherever fire_server.py is deployed (a separate service
+// from the police dispatch-cad backend). ─────────────────────────────────
+const API = 'https://dispatch-cad.onrender.com/fire/incidents';
+const LOG_API = 'https://dispatch-cad.onrender.com/fire/radio-log';
+const STATS_API = 'https://dispatch-cad.onrender.com/fire/stats';
+const STREAM_API = 'https://dispatch-cad.onrender.com/fire/stream';
 
 // ── State ──────────────────────────────────────────────────────────────────
-let knownIds    = new Set();
+let knownIds     = new Set();
+let knownLogIds  = new Set();
 let allIncidents = [];
 let incidentMap  = {};
 let currentOffset = 0;
-let allLoaded   = false;
-let isLoading   = false;
+let logOffset      = 0;
+let allLoaded    = false;
+let logAllLoaded = false;
+let isLoading    = false;
+let isLogLoading = false;
 
-// Stats are derived ONLY from incidents that are "today" in ET.
-// We compute "today in ET" once per updateStats call so it's always accurate.
 function getTodayET() {
   return new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
 }
@@ -346,126 +381,15 @@ function isToday(inc) {
     .toLocaleDateString('en-US', { timeZone: 'America/New_York' }) === getTodayET();
 }
 
-// ── 10-Code table ──────────────────────────────────────────────────────────
-const TEN_CODES = {
-  '10-0':'Use Caution','10-1':'Signal Weak','10-2':'Signal Good','10-3':'Stop Transmitting',
-  '10-4':'Acknowledged','10-5':'Relay Message','10-6':'Busy','10-7':'Out of Service',
-  '10-8':'In Service','10-9':'Repeat','10-10':'Fight in Progress','10-11':'Dog Case',
-  '10-12':'Stand By','10-13':'Weather/Road Report','10-14':'Prowler Report',
-  '10-15':'Civil Disturbance','10-16':'Domestic Problem','10-17':'Meet Complainant',
-  '10-18':'Complete Assignment Quickly','10-19':'Return to Station','10-20':'Location',
-  '10-21':'Call by Phone','10-22':'Disregard','10-23':'Arrived at Scene',
-  '10-24':'Assignment Completed','10-25':'Report to Station','10-26':'Detaining Suspect',
-  '10-27':'License Check','10-28':'Vehicle Registration','10-29':'Check for Wanted',
-  '10-30':'Unnecessary Use of Radio','10-31':'Crime in Progress','10-32':'Man with Gun',
-  '10-33':'Emergency','10-34':'Riot','10-35':'Major Crime Alert','10-36':'Correct Time',
-  '10-37':'Suspicious Vehicle','10-38':'Stopping Suspicious Vehicle','10-39':'Urgent — Use Lights/Siren',
-  '10-40':'Silent Run','10-41':'Beginning Tour of Duty','10-42':'Ending Tour of Duty',
-  '10-43':'Information','10-44':'Permission to Leave','10-45':'Animal Carcass',
-  '10-46':'Assist Motorist','10-47':'Emergency Road Repair','10-48':'Traffic Standard Repair',
-  '10-49':'Traffic Light Out','10-50':'Accident','10-51':'Wrecker Needed',
-  '10-52':'Ambulance Needed','10-53':'Road Blocked','10-54':'Livestock on Highway',
-  '10-55':'Intoxicated Driver','10-56':'Intoxicated Pedestrian','10-57':'Hit and Run',
-  '10-58':'Direct Traffic','10-59':'Escort','10-60':'Squad in Vicinity',
-  '10-61':'Personnel in Area','10-62':'Reply to Message','10-63':'Prepare to Copy',
-  '10-64':'Local Message','10-65':'Net Message Assignment','10-66':'Message Cancellation',
-  '10-67':'Clear to Read Net','10-68':'Dispatch Info','10-69':'Message Received',
-  '10-70':'Fire','10-71':'Advise Nature of Fire','10-72':'Report Progress on Fire',
-  '10-73':'Smoke Report','10-74':'Negative','10-75':'Engaged','10-76':'En Route',
-  '10-77':'ETA','10-78':'Need Assistance','10-79':'Notify Coroner','10-80':'Chase in Progress',
-  '10-81':'Breathalyzer','10-82':'Reserve Lodging','10-83':'Work School Crossing',
-  '10-84':'Advise Phone Number','10-85':'Delayed','10-86':'Officer on Duty',
-  '10-87':'Pick Up Checks','10-88':'Advise Telephone Number','10-89':'Bomb Threat',
-  '10-90':'Bank Alarm','10-91':'Unnecessary Use of Radio','10-92':'Improperly Parked Vehicle',
-  '10-93':'Blockade','10-94':'Drag Racing','10-95':'Prisoner in Custody',
-  '10-96':'Mental Subject','10-97':'Check Signal','10-98':'Prison Break',
-  '10-99':'Records Check','10-100':'Misdemeanor Warrant'
-};
-const TEN_WORDS = {
-  'ten zero':'10-0','ten one':'10-1','ten two':'10-2','ten three':'10-3','ten four':'10-4',
-  'ten five':'10-5','ten six':'10-6','ten seven':'10-7','ten eight':'10-8','ten nine':'10-9',
-  'ten ten':'10-10','ten eleven':'10-11','ten twelve':'10-12','ten thirteen':'10-13',
-  'ten fourteen':'10-14','ten fifteen':'10-15','ten sixteen':'10-16','ten seventeen':'10-17',
-  'ten eighteen':'10-18','ten nineteen':'10-19','ten twenty':'10-20','ten twenty one':'10-21',
-  'ten twenty two':'10-22','ten twenty three':'10-23','ten twenty four':'10-24',
-  'ten twenty five':'10-25','ten twenty six':'10-26','ten twenty seven':'10-27',
-  'ten twenty eight':'10-28','ten twenty nine':'10-29','ten thirty':'10-30',
-  'ten thirty one':'10-31','ten thirty two':'10-32','ten thirty three':'10-33',
-  'ten thirty four':'10-34','ten thirty five':'10-35','ten forty':'10-40',
-  'ten forty four':'10-44','ten fifty':'10-50','ten fifty five':'10-55','ten seventy':'10-70',
-  'ten seventy six':'10-76','ten seventy eight':'10-78','ten eighty':'10-80',
-  'ten ninety six':'10-96','ten ninety nine':'10-99'
-};
-const PHONETIC = {
-  'alpha':'A','bravo':'B','charlie':'C','delta':'D','echo':'E','edward':'E','foxtrot':'F','frank':'F','fleming':'F',
-  'golf':'G','george':'G','hotel':'H','india':'I','ida':'I','juliet':'J','kilo':'K',
-  'lima':'L','lincoln':'L','mike':'M','michael':'M', 'mary':'M', 'marry':'M', 'november':'N', 'nora':'N','oscar':'O','papa':'P',
-  'paul':'P','quebec':'Q','romeo':'R','robert':'R','richard':'R','sierra':'S','sam':'S','tango':'T','uniform':'U',
-  'victor':'V','whiskey':'W','x-ray':'X','xray':'X','yankee':'Y','zulu':'Z','zebra':'Z'
-};
-
-// ── Helpers ────────────────────────────────────────────────────────────────
 function escHtml(s) {
   return String(s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function decodeRadioText(text) {
-  if (!text) return '';
-  const words = text.split(/(\s+)/);
-  let tokens = [], skipNext = 0;
-  for (let wi = 0; wi < words.length; wi++) {
-    if (skipNext > 0) { skipNext--; continue; }
-    const word = words[wi];
-    if (/^\s+$/.test(word)) { tokens.push({ type:'space', val:word }); continue; }
-    const m = word.match(/^(.*?)([.,!?;:]*)$/);
-    const core = m ? m[1] : word, punct = m ? m[2] : '';
-    const coreLower = core.toLowerCase();
-    let matched = false;
-    for (let len = 4; len >= 2; len--) {
-      const chunk = []; let j = wi;
-      while (chunk.length < len && j < words.length) {
-        if (!/^\s+$/.test(words[j])) chunk.push(words[j].replace(/[.,!?;:]*$/,'').toLowerCase());
-        j++;
-      }
-      if (chunk.length < len) continue;
-      const phrase = chunk.join(' ');
-      if (TEN_WORDS[phrase]) {
-        const code = TEN_WORDS[phrase];
-        tokens.push({ type:'tencode', val:code, original:phrase, punct:'' });
-        let consumed = 0, k = wi;
-        while (consumed < len && k < words.length) { if (!/^\s+$/.test(words[k])) consumed++; k++; }
-        skipNext = k - wi - 1; wi = k - 1; matched = true; break;
-      }
-    }
-    if (matched) continue;
-    const numCode = coreLower.match(/^(10)[-\s]?(\d{1,3})$/);
-    if (numCode) {
-      const code = '10-' + numCode[2];
-      if (TEN_CODES[code]) { tokens.push({ type:'tencode', val:code, original:core, punct }); continue; }
-    }
-    if (PHONETIC[coreLower]) { tokens.push({ type:'phonetic', val:PHONETIC[coreLower], original:core, punct }); continue; }
-    tokens.push({ type:'word', val:core + punct });
-  }
-  let result = '', i = 0;
-  while (i < tokens.length) {
-    const tok = tokens[i];
-    if (tok.type === 'phonetic') {
-      result += `<span class="decoded">${escHtml(tok.original)}<span class="decoded-tip">Phonetic: ${escHtml(tok.val)}</span></span>${escHtml(tok.punct||'')}`;
-      i++; continue;
-    }
-    if (tok.type === 'tencode') {
-      const meaning = TEN_CODES[tok.val] || '';
-      result += `<span class="decoded">${escHtml(tok.val)}<span class="decoded-tip">Code: ${escHtml(meaning)}</span></span>${escHtml(tok.punct||'')}`;
-      i++; continue;
-    }
-    result += tok.type === 'space' ? escHtml(tok.val) : escHtml(tok.val);
-    i++;
-  }
-  return result;
-}
-
+// The radio log is unstructured — we still split each stored transcript
+// blob into readable lines client-side, same trick as the incident view,
+// but these lines are NOT tied to any incident card.
 function splitTranscript(text) {
   if (!text || !text.trim()) return [text || ''];
   const lines = text
@@ -473,12 +397,6 @@ function splitTranscript(text) {
     .replace(/,\s+(unit\s+\d|[A-Z]\d{2,})/gi, '|||$1')
     .split('|||').map(s => s.trim()).filter(s => s.length > 3);
   return lines.length > 0 ? lines : [text];
-}
-function renderTxBubble(text) {
-  return splitTranscript(text).map(l => `<span class="tx-line">${escHtml(l)}</span>`).join('');
-}
-function renderModalTx(text) {
-  return splitTranscript(text).map(l => `<span class="m-tx-line">${decodeRadioText(l)}</span>`).join('');
 }
 
 // ── Clock ──────────────────────────────────────────────────────────────────
@@ -509,6 +427,11 @@ function toggleAudio() {
 
 // ── Mobile tabs ────────────────────────────────────────────────────────────
 function mobTab(tab) {
+  // Tapping Calls or Radio backs out of the map view, if it's open.
+  document.getElementById('view-map').style.display = 'none';
+  const mm = document.getElementById('mnb-map');
+  if (mm) mm.classList.remove('active');
+
   const feed = document.getElementById('view-feed');
   const side = document.getElementById('view-side');
   const bi = document.getElementById('mnb-inc'), br = document.getElementById('mnb-rad');
@@ -521,10 +444,9 @@ function mobTab(tab) {
   }
 }
 
-// Call this instead of deriving stats from the incident list
 async function fetchStats() {
   try {
-    const res = await fetch('https://dispatch-cad.onrender.com/stats');
+    const res = await fetch(STATS_API);
     if (!res.ok) return;
     const s = await res.json();
     document.getElementById('stat-total').textContent = s.total;
@@ -534,8 +456,6 @@ async function fetchStats() {
     document.getElementById('stat-rate').textContent  = s.rate;
     document.getElementById('incident-count').textContent = `${s.all_time} total · ${allIncidents.length} loaded`;
 
-
-    // Breakdown
     const types  = s.breakdown || {};
     const sorted = Object.entries(types).sort((a,b)=>b[1]-a[1]).slice(0,6);
     const max    = sorted[0]?.[1] || 1;
@@ -547,8 +467,6 @@ async function fetchStats() {
       </div>`).join('');
   } catch(e) { console.error(e); }
 }
-
-
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function showToast(inc) {
@@ -567,10 +485,8 @@ function setConn(on) {
   document.getElementById('conn-dot-mobile').className = 'tb-pill-dot ' + (on ? 'on' : 'err');
 }
 
-// ── Priority class ─────────────────────────────────────────────────────────
 function pClass(p) { return (p||'unknown').toLowerCase(); }
 
-// ── Last call time formatting (military time on mobile only) ───────────────
 function formatLastCall(val) {
   if (!val) return val;
   if (window.innerWidth > 580) return val;
@@ -584,10 +500,9 @@ function formatLastCall(val) {
   return String(h).padStart(2, '0') + ':' + min;
 }
 
-// ── Incident ID ────────────────────────────────────────────────────────────
 function makeIncidentId(inc) {
   const ts = inc.created_at ? new Date(inc.created_at).getTime() : Date.now();
-  return 'INC-' + String(ts).slice(-6).toUpperCase();
+  return 'FIR-' + String(ts).slice(-6).toUpperCase();
 }
 
 // ── Render incident row ────────────────────────────────────────────────────
@@ -610,11 +525,13 @@ function renderRow(inc) {
   </div>`;
 }
 
-function renderTx(inc) {
-  return `<div class="tx-entry">
-    <div class="tx-time">${escHtml(inc.time_str||'')} · ${escHtml(inc.incident_type||'Radio')}</div>
-    <div class="tx-bubble">${renderTxBubble(inc.transcript||'')}</div>
-  </div>`;
+// Radio log rows are flat, timestamped lines — not grouped by incident.
+function renderLogEntry(entry) {
+  const lines = splitTranscript(entry.text || '');
+  return lines.map(l => `<div class="tx-line-row">
+      <span class="tx-line-time">${escHtml(entry.time_str||'')}</span>
+      <span class="tx-line-text">${escHtml(l)}</span>
+    </div>`).join('');
 }
 
 // ── Audio player ──────────────────────────────────────────────────────────
@@ -627,7 +544,6 @@ function buildAudioPlayer(audioUrl) {
       No audio clip saved for this incident
     </div>`;
   }
-  // Unique ID per modal open to avoid conflicts
   const uid = 'ap_' + Date.now();
   return `<div class="audio-player">
     <div class="ap-label">▸ Radio Clip · Silence Cut</div>
@@ -668,10 +584,8 @@ function apToggle(uid, url) {
   const cur    = document.getElementById(uid + '_cur');
   const dur    = document.getElementById(uid + '_dur');
 
-  // Stop any other playing audio
   if (currentAudioEl && currentAudioEl !== audio) {
     currentAudioEl.pause();
-    // Reset its UI — find its uid
     const prevId = currentAudioEl.id.replace('_audio','');
     const prevIcon = document.getElementById(prevId + '_icon');
     const prevBtn  = document.getElementById(prevId + '_btn');
@@ -735,7 +649,6 @@ function openModal(id) {
   const inc = incidentMap[id];
   if (!inc) return;
 
-  // Stop any playing audio when opening a new modal
   if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
 
   const pc = pClass(inc.priority);
@@ -781,16 +694,15 @@ function openModal(id) {
       ${buildAudioPlayer(inc.audio_url || null)}
     </div>
     <div class="m-section">
-      <div class="m-section-title">Radio Transcript</div>
-      <div class="m-tx-box">${renderModalTx(inc.transcript||'No transcript available.')}</div>
+      <div class="m-section-title">Dispatch Transcript</div>
+      <div class="m-tx-box">${splitTranscript(inc.transcript||'No transcript available.').map(l=>`<span class="m-tx-line">${escHtml(l)}</span>`).join('')}</div>
     </div>
     <div class="m-section">
       <div class="m-section-title">Classification</div>
       <table class="m-table">
         <tr><td>Incident Type</td><td><span class="m-chip ${priChipClass}">${escHtml(inc.incident_type||'Unknown')}</span></td></tr>
         <tr><td>Priority Level</td><td><span class="m-chip ${priChipClass}">${escHtml(inc.priority||'Unknown')}</span></td></tr>
-        <tr><td>Source</td><td>Amherst PD · P25 Scanner · Groq Whisper</td></tr>
-        <tr><td>Talkgroup</td><td>40857 · Erie County NY</td></tr>
+        <tr><td>Source</td><td>Amherst Fire Control · Scanner · Groq Whisper</td></tr>
       </table>
     </div>`;
 
@@ -802,31 +714,198 @@ function closeModalDirect() {
   if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
   document.getElementById('modal-overlay').classList.remove('open');
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModalDirect(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModalDirect(); closeMapOverlay(); }
+});
 
-// ── SSE live feed ──────────────────────────────────────────────────────────
-const sseStream = new EventSource('https://dispatch-cad.onrender.com/stream');
+// ── Incident map (Leaflet + OpenStreetMap/Nominatim, no API key needed) ────
+const geocodeCache      = {};
+const mappedIncidentIds = new Set();
+const AMHERST_CENTER    = [42.9786, -78.7998];
+let bigMap        = null;
+let bigMapMarkers  = {};
+let isGeocoding    = false;
+
+function hasKnownLocation(loc) {
+  return !!loc && loc !== 'Unknown' && loc !== 'Unknown Location' && loc.trim().length > 3;
+}
+
+// Nominatim (OpenStreetMap) free geocoding, biased/bounded to the Amherst NY area.
+async function geocodeLocation(loc) {
+  const key = loc.trim().toLowerCase();
+  if (geocodeCache[key]) return geocodeCache[key];
+  const query = encodeURIComponent(`${loc}, Amherst, NY`);
+  const viewbox = '-78.92,43.05,-78.68,42.90'; // lonMin,latMax,lonMax,latMin around Amherst
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&viewbox=${viewbox}&bounded=1&q=${query}`;
+  try {
+    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data.length) {
+      const coords = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+      geocodeCache[key] = coords;
+      return coords;
+    }
+  } catch(e) { console.error('geocode failed', loc, e); }
+  return null;
+}
+
+function priorityColor(p) {
+  const pc = pClass(p);
+  return { high:'#e74c3c', medium:'#f39c12', low:'#27ae60', unknown:'#4a5568' }[pc] || '#4a5568';
+}
+
+function makeMapIcon(priority) {
+  const color = priorityColor(priority);
+  return L.divIcon({
+    className: 'cad-map-marker',
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #0c0e12;box-shadow:0 0 0 3px ${color}40;"></div>`,
+    iconSize: [14,14],
+    iconAnchor: [7,7],
+    popupAnchor: [0,-10]
+  });
+}
+
+// The map panel (header + #big-map) is a single DOM node that gets moved
+// between the desktop full-screen popup and the mobile in-flow tab, so
+// there's only ever one Leaflet instance and it always lives inside
+// normal document flow (no fixed-overlay vs. persistent-bar overlap).
+const mapPanel = document.createElement('div');
+mapPanel.className = 'map-panel';
+mapPanel.innerHTML = `
+  <div class="map-overlay-hdr">
+    <div class="map-overlay-title-wrap">
+      <div class="map-overlay-title">Incident Map</div>
+      <div class="map-overlay-sub">Last 24 Hours · <span id="map-stat-count">0 mapped</span></div>
+    </div>
+    <div class="map-legend">
+      <span class="map-legend-item"><i class="dot high"></i>P1</span>
+      <span class="map-legend-item"><i class="dot medium"></i>P2</span>
+      <span class="map-legend-item"><i class="dot low"></i>P3</span>
+      <span class="map-legend-item"><i class="dot unknown"></i>Unk</span>
+    </div>
+    <button class="modal-close map-close-btn" onclick="closeMapOverlay()">✕</button>
+  </div>
+  <div id="big-map"></div>
+`;
+
+function initBigMap() {
+  if (bigMap) return;
+  const mapEl = mapPanel.querySelector('#big-map');
+  bigMap = L.map(mapEl, { zoomControl: true, attributionControl: true }).setView(AMHERST_CENTER, 12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(bigMap);
+}
+
+// Geocodes and drops a pin for every not-yet-mapped incident from the last 24 hours.
+async function renderMapMarkers() {
+  if (isGeocoding || !bigMap) return;
+  isGeocoding = true;
+  const cutoff = Date.now() - 24*60*60*1000;
+  const eligible = allIncidents.filter(inc =>
+    inc.created_at &&
+    new Date(inc.created_at).getTime() >= cutoff &&
+    hasKnownLocation(inc.location) &&
+    !mappedIncidentIds.has(String(inc.id))
+  );
+
+  const countEl = document.getElementById('map-stat-count');
+  let mappedTotal = Object.keys(bigMapMarkers).length;
+
+  for (const inc of eligible) {
+    const coords = await geocodeLocation(inc.location);
+    if (coords) {
+      const marker = L.marker(coords, { icon: makeMapIcon(inc.priority) }).addTo(bigMap);
+      const pc = pClass(inc.priority);
+      const priLabel = {high:'Priority 1',medium:'Priority 2',low:'Priority 3',unknown:'Unknown'}[pc] || inc.priority;
+      marker.bindPopup(`<div style="font-family:'JetBrains Mono',monospace;min-width:150px;">
+          <div style="font-weight:600;color:#fff;font-size:12px;margin-bottom:2px;">${escHtml(inc.incident_type||'Unknown')}</div>
+          <div style="font-size:10px;color:#8892a0;margin-bottom:4px;">${escHtml(inc.location)}</div>
+          <div style="font-size:10px;color:${priorityColor(inc.priority)};">${escHtml(priLabel)} · ${escHtml(inc.time_str||'')}</div>
+        </div>`);
+      marker.on('click', () => openModal(inc.id));
+      bigMapMarkers[inc.id] = marker;
+      mappedTotal++;
+    }
+    mappedIncidentIds.add(String(inc.id));
+    if (countEl) countEl.textContent = `${mappedTotal} mapped`;
+    // Respect Nominatim's usage policy (max ~1 request/sec).
+    await new Promise(r => setTimeout(r, 300));
+  }
+  isGeocoding = false;
+}
+
+function openMapOverlay() {
+  initBigMap();
+  const isMobile = window.innerWidth <= 580;
+
+  if (isMobile) {
+    // Mobile: the map becomes a normal in-flow tab, same as Calls/Radio,
+    // sitting between the scanner/top bars and the bottom nav — no
+    // fixed-overlay, so nothing overlaps the zoom controls.
+    document.getElementById('view-map').appendChild(mapPanel);
+    document.getElementById('view-feed').style.display = 'none';
+    document.getElementById('view-side').classList.remove('mob-show');
+    document.getElementById('view-map').style.display = 'flex';
+
+    document.querySelectorAll('.mnb').forEach(b => b.classList.remove('active'));
+    const mm = document.getElementById('mnb-map');
+    if (mm) mm.classList.add('active');
+  } else {
+    // Desktop: true full-screen popup.
+    document.getElementById('map-overlay').appendChild(mapPanel);
+    document.getElementById('map-overlay').classList.add('open');
+  }
+
+  setTimeout(() => { if (bigMap) bigMap.invalidateSize(); }, 60);
+  renderMapMarkers();
+}
+
+function closeMapOverlay() {
+  // Desktop popup close (X button). On mobile this button is hidden —
+  // tapping the always-visible Calls/Radio tabs backs out via mobTab().
+  document.getElementById('map-overlay').classList.remove('open');
+}
+
+// ── SSE live feed — carries both incident cards and flat log lines ────────
+const sseStream = new EventSource(STREAM_API);
 sseStream.onopen  = () => setConn(true);
 sseStream.onerror = () => setConn(false);
 sseStream.onmessage = (event) => {
-  let inc; try { inc = JSON.parse(event.data); } catch(e) { return; }
-  if (!inc || knownIds.has(String(inc.id))) return;
-  knownIds.add(String(inc.id));
-  incidentMap[String(inc.id)] = inc;
-  allIncidents.unshift(inc);
+  let msg; try { msg = JSON.parse(event.data); } catch(e) { return; }
+  if (!msg || !msg.kind || !msg.data) return;
 
-  const feed  = document.getElementById('incident-feed');
-  const tfeed = document.getElementById('transcript-feed');
-  if (feed.querySelector('.empty'))  feed.innerHTML = '';
-  if (tfeed.querySelector('.empty')) tfeed.innerHTML = '';
-  feed.insertAdjacentHTML('afterbegin', renderRow(inc));
-  tfeed.insertAdjacentHTML('afterbegin', renderTx(inc));
+  if (msg.kind === 'incident') {
+    const inc = msg.data;
+    if (knownIds.has(String(inc.id))) return;
+    knownIds.add(String(inc.id));
+    incidentMap[String(inc.id)] = inc;
+    allIncidents.unshift(inc);
 
-  fetchStats();
-  showToast(inc);
+    const feed = document.getElementById('incident-feed');
+    if (feed.querySelector('.empty')) feed.innerHTML = '';
+    feed.insertAdjacentHTML('afterbegin', renderRow(inc));
+
+    fetchStats();
+    showToast(inc);
+    if (document.getElementById('map-overlay').classList.contains('open')) renderMapMarkers();
+    return;
+  }
+
+  if (msg.kind === 'log') {
+    const entry = msg.data;
+    if (knownLogIds.has(String(entry.id))) return;
+    knownLogIds.add(String(entry.id));
+
+    const tfeed = document.getElementById('transcript-feed');
+    tfeed.insertAdjacentHTML('afterbegin', renderLogEntry(entry));
+  }
 };
 
-// ── Paginated fetch ────────────────────────────────────────────────────────
+// ── Paginated fetch: incidents ─────────────────────────────────────────────
 async function fetchIncidents(offset = 0) {
   if (isLoading || allLoaded) return;
   isLoading = true;
@@ -836,10 +915,8 @@ async function fetchIncidents(offset = 0) {
     const incidents = await res.json();
     setConn(true);
 
-    const feed  = document.getElementById('incident-feed');
-    const tfeed = document.getElementById('transcript-feed');
-
-    if (offset === 0) { feed.innerHTML = ''; tfeed.innerHTML = ''; allIncidents = []; knownIds = new Set(); incidentMap = {}; }
+    const feed = document.getElementById('incident-feed');
+    if (offset === 0) { feed.innerHTML = ''; allIncidents = []; knownIds = new Set(); incidentMap = {}; }
 
     const newOnes = incidents.filter(i => !knownIds.has(String(i.id)));
     if (newOnes.length === 0 || incidents.length === 0) { allLoaded = true; isLoading = false; return; }
@@ -849,15 +926,13 @@ async function fetchIncidents(offset = 0) {
       incidentMap[String(i.id)] = i;
       allIncidents.push(i);
       feed.insertAdjacentHTML('beforeend', renderRow(i));
-      tfeed.insertAdjacentHTML('beforeend', renderTx(i));
     });
 
     if (incidents.length < 50) allLoaded = true;
     else currentOffset = offset + 50;
 
-    // Stats update on every page load, but the filter inside
-    // updateStats() ensures only today's incidents count
     fetchStats();
+    if (document.getElementById('map-overlay').classList.contains('open')) renderMapMarkers();
   } catch(e) {
     setConn(false);
     console.error(e);
@@ -865,15 +940,49 @@ async function fetchIncidents(offset = 0) {
   isLoading = false;
 }
 
-// Infinite scroll
+// ── Paginated fetch: radio log ─────────────────────────────────────────────
+async function fetchLog(offset = 0) {
+  if (isLogLoading || logAllLoaded) return;
+  isLogLoading = true;
+  try {
+    const res = await fetch(`${LOG_API}?offset=${offset}`);
+    if (!res.ok) throw new Error();
+    const entries = await res.json();
+
+    const tfeed = document.getElementById('transcript-feed');
+    const newOnes = entries.filter(e => !knownLogIds.has(String(e.id)));
+    if (newOnes.length === 0 || entries.length === 0) { logAllLoaded = true; isLogLoading = false; return; }
+
+    newOnes.forEach(e => {
+      knownLogIds.add(String(e.id));
+      tfeed.insertAdjacentHTML('beforeend', renderLogEntry(e));
+    });
+
+    if (entries.length < 50) logAllLoaded = true;
+    else logOffset = offset + 50;
+  } catch(e) {
+    console.error(e);
+  }
+  isLogLoading = false;
+}
+
+// Infinite scroll — incidents
 document.getElementById('incident-feed').addEventListener('scroll', function() {
   if (allLoaded || isLoading) return;
   if (this.scrollTop + this.clientHeight >= this.scrollHeight - 150) {
     fetchIncidents(currentOffset);
   }
 });
+// Infinite scroll — radio log
+document.getElementById('transcript-feed').addEventListener('scroll', function() {
+  if (logAllLoaded || isLogLoading) return;
+  if (this.scrollTop + this.clientHeight >= this.scrollHeight - 150) {
+    fetchLog(logOffset);
+  }
+});
 
 fetchIncidents(0);
+fetchLog(0);
 fetchStats();
 setInterval(fetchStats, 60000);
 </script>
