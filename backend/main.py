@@ -510,7 +510,7 @@ FIRE_LOG_TABLE       = "fire_radio_log"
 GEOCODE_CACHE_TABLE  = "geocode_cache"   # server-side cache of resolved map coordinates
 FIRE_SEG_SILENCE_DB      = -40.0  # ffmpeg mean_volume threshold; segments quieter than this = silence
 FIRE_PREROLL_SEGMENTS    = 1      # keep this many segments (~4s) buffered before a trigger, so we don't clip the start of a call
-FIRE_HANGOVER_SEGMENTS   = 1      # end capture after this many consecutive silent segments (~4s of quiet)
+FIRE_HANGOVER_SEGMENTS   = 3      # end capture after this many consecutive silent segments (~4s of quiet)
 FIRE_MAX_CLIP_SEGMENTS   = 15     # safety cap (~60s) in case a call/noise never goes quiet
 
 
