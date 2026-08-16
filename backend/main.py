@@ -512,6 +512,9 @@ FIRE_SEG_SILENCE_DB      = -40.0  # ffmpeg mean_volume threshold; segments quiet
 FIRE_PREROLL_SEGMENTS    = 1      # keep this many segments (~4s) buffered before a trigger, so we don't clip the start of a call
 FIRE_HANGOVER_SEGMENTS   = 3      # end capture after this many consecutive silent segments (~4s of quiet)
 FIRE_MAX_CLIP_SEGMENTS   = 15     # safety cap (~60s) in case a call/noise never goes quiet
+FIRE_VAD_CHECK_EVERY_N   = 2      # only actually run ffmpeg volumedetect on every Nth
+                                   # segment — cuts ffmpeg spawn rate roughly in half,
+                                   # still detects speech onset within ~8s instead of ~4s
 
 
 # Repeated-transmission de-dupe: fire/EMS dispatch conventionally reads a
@@ -731,6 +734,8 @@ def fire_scanner_loop():
     capture_buffer = []
     capturing = False
     silent_run = 0
+    seg_counter = 0
+    last_has_audio = False
 
     while True:
         try:
@@ -755,8 +760,13 @@ def fire_scanner_loop():
                 print(f"[fire-scanner] segment fetch failed: {e}", flush=True)
                 continue
 
-            vol_db = fire_segment_mean_volume_db(seg_bytes)
-            has_audio = vol_db > FIRE_SEG_SILENCE_DB
+            seg_counter += 1
+            if seg_counter % FIRE_VAD_CHECK_EVERY_N == 0:
+                vol_db = fire_segment_mean_volume_db(seg_bytes)
+                has_audio = vol_db > FIRE_SEG_SILENCE_DB
+                last_has_audio = has_audio
+            else:
+                has_audio = last_has_audio  # reuse last check, skip spawning ffmpeg this round
 
             if not capturing:
                 if has_audio:
