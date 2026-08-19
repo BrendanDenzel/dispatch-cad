@@ -60,6 +60,7 @@ audio{display:none;}
 .stat:last-child{border-right:none;}
 .stat-lbl{font-size:9px;font-weight:500;color:var(--text3);letter-spacing:1px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .stat-n{font-family:var(--mono);font-size:22px;font-weight:500;line-height:1.1;}
+#stat-mostcalls{font-size:20px;}
 .c-blue{color:var(--blue-bright);}.c-red{color:var(--red-bright);}.c-green{color:var(--green-bright);}.c-amber{color:var(--amber-bright);}
 .workspace{display:flex;flex:1;overflow:hidden;min-height:0;}
 .feed-col{display:flex;flex-direction:column;flex:1;min-width:0;min-height:0;}
@@ -72,7 +73,7 @@ audio{display:none;}
 .irow.new-in{animation:flash .7s ease-out;}
 @keyframes flash{0%{background:rgba(231,76,60,.12)}100%{background:transparent}}
 .irow-bar{width:3px;align-self:stretch;background:var(--border2);}
-.irow-bar.high{background:var(--red-bright);}.irow-bar.medium{background:var(--amber-bright);}.irow-bar.low{background:var(--green-bright);}.irow-bar.unknown{background:var(--text3);}
+.irow-bar.fire{background:var(--red-bright);}.irow-bar.ems{background:var(--amber-bright);}.irow-bar.unknown{background:var(--text3);}
 .irow-body{padding:10px 12px;min-width:0;}
 .irow-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:3px;}
 .irow-type{font-size:13px;font-weight:600;color:#fff;}
@@ -81,9 +82,8 @@ audio{display:none;}
 .irow-loc svg{width:10px;height:10px;fill:currentColor;opacity:.6;flex-shrink:0;}
 .irow-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .pri-tag{font-family:var(--mono);font-size:9px;letter-spacing:.8px;padding:2px 6px;border-radius:2px;text-transform:uppercase;border:1px solid transparent;}
-.pri-tag.high{background:var(--red-dim);color:var(--red-bright);border-color:rgba(231,76,60,.2);}
-.pri-tag.medium{background:var(--amber-dim);color:var(--amber-bright);border-color:rgba(243,156,18,.2);}
-.pri-tag.low{background:var(--green-dim);color:var(--green-bright);border-color:rgba(39,174,96,.2);}
+.pri-tag.fire{background:var(--red-dim);color:var(--red-bright);border-color:rgba(231,76,60,.2);}
+.pri-tag.ems{background:var(--amber-dim);color:var(--amber-bright);border-color:rgba(243,156,18,.2);}
 .pri-tag.unknown{background:rgba(74,85,104,.15);color:var(--text3);border-color:var(--border);}
 .unit-chip{font-family:var(--mono);font-size:9px;padding:2px 6px;background:var(--blue-dim);border:1px solid rgba(231,76,60,.2);color:var(--blue-bright);border-radius:2px;}
 .audio-badge{display:inline-flex;align-items:center;gap:3px;font-family:var(--mono);font-size:9px;padding:2px 6px;background:rgba(39,174,96,.08);border:1px solid rgba(39,174,96,.2);color:var(--green-bright);border-radius:2px;}
@@ -107,11 +107,11 @@ audio{display:none;}
 .empty svg{width:32px;height:32px;stroke:var(--text3);fill:none;stroke-width:1.5;opacity:.4;}
 .empty-msg{font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);}
 .toast{position:fixed;bottom:16px;right:16px;z-index:9000;background:var(--panel2);border:1px solid var(--border2);border-left:3px solid var(--blue);border-radius:3px;padding:10px 14px;min-width:220px;max-width:280px;animation:toastIn .25s ease-out;}
-.toast.high{border-left-color:var(--red-bright);}.toast.medium{border-left-color:var(--amber-bright);}
+.toast.fire{border-left-color:var(--red-bright);}.toast.ems{border-left-color:var(--amber-bright);}
 @keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .toast-hd{display:flex;align-items:center;gap:7px;margin-bottom:3px;}
 .toast-dot{width:6px;height:6px;border-radius:50%;background:var(--blue);flex-shrink:0;}
-.toast.high .toast-dot{background:var(--red-bright);}.toast.medium .toast-dot{background:var(--amber-bright);}
+.toast.fire .toast-dot{background:var(--red-bright);}.toast.ems .toast-dot{background:var(--amber-bright);}
 .toast-type{font-size:12px;font-weight:600;color:#fff;}
 .toast-loc{font-family:var(--mono);font-size:10px;color:var(--text2);}
 
@@ -139,7 +139,7 @@ audio{display:none;}
 .modal-hdr{padding:14px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;background:var(--panel2);flex-shrink:0;}
 .modal-hdr-left{display:flex;align-items:center;gap:10px;}
 .modal-hdr-bar{width:4px;height:32px;border-radius:2px;background:var(--blue);}
-.modal-hdr-bar.high{background:var(--red-bright);}.modal-hdr-bar.medium{background:var(--amber-bright);}.modal-hdr-bar.low{background:var(--green-bright);}
+.modal-hdr-bar.fire{background:var(--red-bright);}.modal-hdr-bar.ems{background:var(--amber-bright);}
 .modal-title{font-size:16px;font-weight:700;color:#fff;}
 .modal-sub{font-size:11px;color:var(--text2);margin-top:1px;font-family:var(--mono);}
 .modal-close{background:transparent;border:1px solid var(--border2);color:var(--text2);width:28px;height:28px;border-radius:3px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
@@ -200,6 +200,7 @@ audio{display:none;}
 .mnb-lbl{font-size:9px;letter-spacing:.5px;text-transform:uppercase;font-family:var(--mono);}
 @media(max-width:860px){.side{display:none;}.stat .stat-lbl{font-size:8px;}.stat-n{font-size:18px;}}
 @media(max-width:580px){
+  #stat-mostcalls{font-size:13px;}
   .tb-pill-desktop{display:none;}.tb-pill-mobile{display:flex;}
   .topbar{padding:0 10px;}.tb-sub,.tb-date{display:none;}.tb-clock{font-size:14px;}
   .tb-name-full{display:none;}.tb-name-short{display:inline;}
@@ -268,7 +269,7 @@ audio{display:none;}
 
 <div class="stats">
   <div class="stat"><div class="stat-lbl">Total Today</div><div class="stat-n c-blue" id="stat-total">0</div></div>
-  <div class="stat"><div class="stat-lbl">Priority 1</div><div class="stat-n c-red" id="stat-high">0</div></div>
+  <div class="stat"><div class="stat-lbl">Most Calls Today</div><div class="stat-n c-red" id="stat-mostcalls">—</div></div>
   <div class="stat"><div class="stat-lbl">Last Call</div><div class="stat-n c-amber" id="stat-last">—</div></div>
   <div class="stat"><div class="stat-lbl">Calls / Hr</div><div class="stat-n c-blue" id="stat-rate">0</div></div>
 </div>
@@ -489,8 +490,8 @@ const KEYWORD_BANK = {
   "I look at creek": "Ellicott Creek",
   "I'll look at creek": "Ellicott Creek",
   "I have a little future": "having a seizure",
-  "Formallly": "Swormsville",
-  "1-B-L": "Swormsville",
+  "Formallly": "Swormville",
+  "1-B-L": "Swormville",
   "Townline": "Tonawanda",
   "Tonauna": "Tonawanda",
   "king west, balinger": "Westphalinger",
@@ -521,7 +522,44 @@ const KEYWORD_BANK = {
   "alleyca": "Ellicott",
   "elecate": "Ellicott",
   "I'm harsh fire": "Amherst Fire",
-  "Amherst Clare": "Amherst Fire"
+  "Amherst Clare": "Amherst Fire",
+  "Detzel": "Getzville",
+  "Getsl": "Getzville",
+  "Torneville": "Swormville",
+  "Tornville": "Swormville",
+  "Swarmville": "Swormville",
+  "scott's bell": "Getzville",
+  "scotts bell": "Getzville",
+  "scottsville": "Getzville",
+  "sider": "Snyder",
+  "NEMS": "and EMS",
+  "indiana, muscle": "Clarence an EMS",
+  "this is sam hurston": "East Amherst",
+  "MLS": "EMS",
+  "form vill": "Swormville",
+  "form vill": "Swormville",
+  "form villean": "Swormville an",
+  "form bill": "Swormville",
+  "Alica Creek": "Ellicott Creek",
+  "Alica": "Ellicott",
+  "Alika": "Ellicott",
+  "Alika Creek": "Ellicott Creek",
+  "swarm bill": "Swormville",
+  "eccreak": "Ellicott Creek",
+  "eccreek": "Ellicott Creek",
+  "caratel": "Harris Hill",
+  "carousel": "Harris Hill",
+  "sam hurst fire": "Amherst Fire",
+  "sam hurst, fire": "Amherst Fire",
+  "may transit": "Main Transit",
+  "amherst, fire": "Amherst Fire",
+  "bellica creek": "Ellicott Creek",
+  "bellica": "Ellicott",
+  "amherst drive": "Amherst Fire",
+  "gatsville": "Getzville",
+  "NAMS": "an EMS",
+  "wimbledon": "Williamsville",
+  "wimbleton": "Williamsville"
 };
 
 function applyKeywordBank(text) {
@@ -534,6 +572,56 @@ function applyKeywordBank(text) {
     out = out.replace(re, right);
   }
   return out;
+}
+
+// ── Timestamp normalization ────────────────────────────────────────────
+// Whisper transcribes clock-time references inconsistently — "1630",
+// "16 30", "16-30", "16:30", sometimes with "timestamp" before it or
+// "hours"/"hrs" after it. This rewrites any of those forms to "HH:MM".
+// Anchored to the "timestamp"/"hours" keywords on purpose so it never
+// touches unrelated numbers (radio codes like "10-4", street numbers,
+// unit numbers, etc).
+function normalizeTimestamps(text) {
+  if (!text) return text;
+  let out = text;
+
+  function toHHMM(h, m) {
+    h = parseInt(h, 10); m = parseInt(m, 10);
+    if (isNaN(h) || isNaN(m) || h > 23 || m > 59) return null;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  }
+
+  // XX:XX / XX-XX / XX XX — anchored by "timestamp"/"Amherst Fire" before
+  // it, or "hours"/"hrs"/"Amherst Fire" right after it.
+  out = out.replace(
+    /\b((?:timestamp|Amherst Fire)\s+)?(\d{1,2})\s*[:\-\s]\s*(\d{2})\b(\s*(?:hours?|hrs?|Amherst Fire)\b)?/gi,
+    (m0, ts, h, mm, hrs) => {
+      if (!ts && !hrs) return m0;
+      const hhmm = toHHMM(h, mm);
+      return hhmm ? (ts || '') + hhmm + (hrs || '') : m0;
+    }
+  );
+
+  // Bare 3–4 digit time, e.g. "930 hours", "timestamp 1630", or
+  // "1342 Amherst Fire"
+  out = out.replace(
+    /\b((?:timestamp|Amherst Fire)\s+)?(\d{3,4})\b(\s*(?:hours?|hrs?|Amherst Fire)\b)?/gi,
+    (m0, ts, digits, hrs) => {
+      if (!ts && !hrs) return m0;
+      const h = digits.length === 3 ? digits.slice(0, 1) : digits.slice(0, 2);
+      const mm = digits.length === 3 ? digits.slice(1) : digits.slice(2);
+      const hhmm = toHHMM(h, mm);
+      return hhmm ? (ts || '') + hhmm + (hrs || '') : m0;
+    }
+  );
+
+  return out;
+}
+
+// The one function to call anywhere general transcript/notes text is
+// displayed — applies keyword corrections, then timestamp normalization.
+function formatText(text) {
+  return normalizeTimestamps(applyKeywordBank(text));
 }
 
 // Dispatch convention: "6-6 Bruce Road" means house number 66, not a range —
@@ -562,6 +650,27 @@ function isValidAddress(rawLoc) {
   return true;
 }
 
+// ── Address dedup (1hr window) ──────────────────────────────────────────
+// If two calls at the same address land within an hour of each other, only
+// the first one gets shown as an incident card. Later ones inside that
+// window are folded in — they still show up normally in the Radio Log,
+// which pulls from a separate feed this check never touches.
+let addressLastShown = {}; // normalized location -> ms timestamp of last shown incident
+
+function getIncidentTimeMs(inc) {
+  return inc.created_at ? new Date(inc.created_at).getTime() : Date.now();
+}
+
+function isDuplicateAddress(inc) {
+  const loc = normalizeLocationText(inc.location || '').trim().toLowerCase();
+  if (!loc) return false;
+  const t = getIncidentTimeMs(inc);
+  const last = addressLastShown[loc];
+    if (last !== undefined && Math.abs(t - last) <= 1800000) return true;
+  addressLastShown[loc] = t;
+  return false;
+}
+
 // ── Known Fire Departments / Stations ────────────────────────────────────
 // Add every department/station name that could respond to a call here.
 // getStationLabel() scans (in order: unit field, then transcript, then
@@ -582,7 +691,7 @@ const DEPARTMENT_LIST = [
   { label: "Eggertsville FD",   aliases: ["Eggertsville"] },
   { label: "Getzville FD",      aliases: ["Getzville"] },
   { label: "Williamsville FD",  aliases: ["Williamsville", "Hutchinson Hose", "Hutchinson"] },
-  { label: "Swormsville FD",    aliases: ["Swormsville"] },
+  { label: "Swormville FD",    aliases: ["Swormville"] },
   { label: "Harris Hill FD",    aliases: ["Harris Hill"] },
   { label: "Newstead FD",       aliases: ["Newstead"] },
   { label: "Clarence FD",       aliases: ["Clarence"] },
@@ -735,14 +844,33 @@ function mobTab(tab) {
   }
 }
 
+function updateMostCallsToday() {
+  const tally = {};
+  allIncidents.forEach(inc => {
+    if (!isToday(inc)) return;
+    const dept = getStationLabel(inc);
+    if (dept === 'NA') return;
+    tally[dept] = (tally[dept] || 0) + 1;
+  });
+
+  const entries = Object.entries(tally);
+  const el = document.getElementById('stat-mostcalls');
+  if (entries.length === 0) { el.textContent = '—'; return; }
+
+  entries.sort((a, b) => b[1] - a[1]);
+  let [topDept, topCount] = entries[0];
+  if (window.innerWidth <= 580) topDept = topDept.replace(' FD', '');
+  el.textContent = `${topDept} (${topCount})`;
+}
+
 async function fetchStats() {
   try {
     const res = await fetch(STATS_API);
     if (!res.ok) return;
     const s = await res.json();
     document.getElementById('stat-total').textContent = s.total;
-    document.getElementById('stat-high').textContent  = s.high;
     document.getElementById('stat-last').textContent  = formatLastCall(s.last_call);
+    updateMostCallsToday();
     document.getElementById('stat-rate').textContent  = s.rate;
     document.getElementById('incident-count').textContent = `${s.all_time} total · ${allIncidents.length} loaded`;
 
@@ -799,7 +927,7 @@ function makeIncidentId(inc) {
 function renderRow(inc) {
   const pc = pClass(inc.priority);
   const station = `<span class="unit-chip">${escHtml(getStationLabel(inc))}</span>`;
-  const priLabel = {high:'Priority 1',medium:'Priority 2',low:'Priority 3',unknown:'Unknown'}[pc]||inc.priority;
+    const priLabel = {fire:'FIRE',ems:'EMS',unknown:'UNKNOWN'}[pc]||inc.priority;
   const audioBadge = inc.audio_url
     ? `<span class="audio-badge"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>Audio</span>`
     : '';
@@ -809,7 +937,7 @@ function renderRow(inc) {
       <div class="irow-top"><div class="irow-type">${escHtml(inc.incident_type||'Unknown')}</div><div class="irow-time">${escHtml(inc.time_str||'')}</div></div>
       <div class="irow-loc"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>${escHtml(normalizeLocationText(inc.location)||'Location Unknown')}</div>
       <div class="irow-foot"><span class="pri-tag ${pc}">${escHtml(priLabel)}</span>${station}${audioBadge}</div>
-      ${inc.notes?`<div class="irow-notes">${escHtml(applyKeywordBank(inc.notes))}</div>`:''}
+      ${inc.notes?`<div class="irow-notes">${escHtml(formatText(inc.notes))}</div>`:''}
     </div>
     <div class="irow-arr">›</div>
   </div>`;
@@ -817,7 +945,7 @@ function renderRow(inc) {
 
 // Radio log rows are flat, timestamped lines — not grouped by incident.
 function renderLogEntry(entry) {
-  const lines = splitTranscript(applyKeywordBank(entry.text || ''));
+  const lines = splitTranscript(formatText(entry.text || ''));
   return lines.slice().reverse().map(l => `<div class="tx-line-row">
       <span class="tx-line-time">${escHtml(entry.time_str||'')}</span>
       <span class="tx-line-text">${escHtml(l)}</span>
@@ -942,8 +1070,8 @@ function openModal(id) {
   if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
 
   const pc = pClass(inc.priority);
-  const priLabel = {high:'Priority 1 — High',medium:'Priority 2 — Medium',low:'Priority 3 — Low',unknown:'Unknown Priority'}[pc]||inc.priority;
-  const priChipClass = {high:'red',medium:'amber',low:'green',unknown:''}[pc]||'';
+  const priLabel = {fire:'FIRE',ems:'EMS',unknown:'UNKNOWN'}[pc]||inc.priority;
+  const priChipClass = {fire:'red',ems:'amber',unknown:''}[pc]||'';
   const incId = makeIncidentId(inc);
   const createdFull = inc.created_at
     ? new Date(inc.created_at).toLocaleString('en-US',{timeZone:'America/New_York',hour12:false})
@@ -970,10 +1098,10 @@ function openModal(id) {
         <tr><td>Incident ID</td><td><span class="m-id">${incId}</span></td></tr>
         <tr><td>Created</td><td>${createdFull} ET</td></tr>
         <tr><td>Type</td><td>${escHtml(inc.incident_type||'Unknown')}</td></tr>
-        <tr><td>Priority</td><td><div class="m-pri"><div class="m-pri-dot" style="background:var(--${pc==='high'?'red':pc==='medium'?'amber':pc==='low'?'green':'text3'}-bright)"></div>${escHtml(priLabel)}</div></td></tr>
+        <tr><td>Priority</td><td><div class="m-pri"><div class="m-pri-dot" style="background:var(--${pc==='fire'?'red':pc==='ems'?'amber':'text3'}-bright)"></div>
         <tr><td>Location</td><td>${locCell}</td></tr>
         <tr><td>Fire Department</td><td><div class="m-chips">${stationChip}</div></td></tr>
-        <tr><td>Notes</td><td>${escHtml(applyKeywordBank(inc.notes||'')||'—')}</td></tr>
+        <tr><td>Notes</td><td>${escHtml(formatText(inc.notes||'')||'—')}</td></tr>
       </table>
     </div>
     <div class="m-section">
@@ -982,7 +1110,7 @@ function openModal(id) {
     </div>
     <div class="m-section">
       <div class="m-section-title">Dispatch Transcript</div>
-      <div class="m-tx-box">${splitTranscript(applyKeywordBank(inc.transcript||'No transcript available.')).map(l=>`<span class="m-tx-line">${escHtml(l)}</span>`).join('')}</div>
+      <div class="m-tx-box">${splitTranscript(formatText(inc.transcript||'No transcript available.')).map(l=>`<span class="m-tx-line">${escHtml(l)}</span>`).join('')}</div>
     </div>
     <div class="m-section">
       <div class="m-section-title">Classification</div>
@@ -1021,6 +1149,7 @@ sseStream.onmessage = (event) => {
     // still audible/readable in the Radio Log panel, which is a separate
     // feed fed by 'log' messages below.
     if (!isValidAddress(inc.location)) return;
+    if (isDuplicateAddress(inc)) return;
     incidentMap[String(inc.id)] = inc;
     allIncidents.unshift(inc);
 
@@ -1054,16 +1183,28 @@ async function fetchIncidents(offset = 0) {
     setConn(true);
 
     const feed = document.getElementById('incident-feed');
-    if (offset === 0) { feed.innerHTML = ''; allIncidents = []; knownIds = new Set(); incidentMap = {}; }
+    if (offset === 0) { feed.innerHTML = ''; allIncidents = []; knownIds = new Set(); incidentMap = {}; addressLastShown = {}; }
 
     if (incidents.length === 0) { allLoaded = true; isLoading = false; return; }
 
     // Drop anything with an unknown/empty location — it still appears
     // normally in the Radio Log panel, just not as an incident card.
     const unseen = incidents.filter(i => !knownIds.has(String(i.id)));
+    unseen.forEach(i => knownIds.add(String(i.id))); // mark seen regardless of validity
+
+    // Decide duplicates in chronological (oldest-first) order so the
+    // OLDEST call at an address always wins, no matter what order the API
+    // returned them in. Render order below is untouched — still newest-first.
+    const keepIds = new Set();
+    [...unseen]
+      .sort((a, b) => getIncidentTimeMs(a) - getIncidentTimeMs(b))
+      .forEach(i => {
+        if (!isValidAddress(i.location)) return;
+        if (!isDuplicateAddress(i)) keepIds.add(String(i.id));
+      });
+
     unseen.forEach(i => {
-      knownIds.add(String(i.id)); // mark seen regardless of validity, so it's never re-checked
-      if (!isValidAddress(i.location)) return;
+      if (!keepIds.has(String(i.id))) return;
       incidentMap[String(i.id)] = i;
       allIncidents.push(i);
       feed.insertAdjacentHTML('beforeend', renderRow(i));
