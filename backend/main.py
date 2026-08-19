@@ -81,6 +81,12 @@ def get_stats():
                  .gte("created_at", today_start_utc)
                  .execute()).count or 0
 
+        high = (db.table("incidents")
+                .select("id", count="exact")
+                .gte("created_at", today_start_utc)
+                .eq("priority", "High")
+                .execute()).count or 0
+
         rows = (db.table("incidents")
                 .select("units, time_str, created_at, incident_type")
                 .gte("created_at", today_start_utc)
@@ -102,18 +108,18 @@ def get_stats():
             t = r.get("incident_type") or "Unknown"
             types[t] = types.get(t, 0) + 1
 
-    return jsonify({
+        return jsonify({
             "total": total,
             "all_time": all_time,
+            "high": high,
             "units": len(all_units),
             "last_call": last_call,
             "rate": rate,
             "breakdown": types
         })
-    
     except Exception as e:
         print(f"Stats error: {e}", flush=True)
-        return jsonify({"total": 0, "all_time": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
+        return jsonify({"total": 0, "all_time": 0, "high": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
 
 
 # ─────────────────────────────────────────────
@@ -372,7 +378,7 @@ Respond ONLY with a valid JSON object with these exact fields:
 - incident_type: string (e.g. "MVA", "Domestic", "Theft", "Medical", "Noise Complaint", "Burglary", "Suspicious", "Unknown")
 - location: string (address or intersection mentioned, or "Unknown")
 - units: array of strings (unit numbers or call signs mentioned, empty array if none)
-- priority: string, one of exactly: "FIRE", "EMS", "UNKNOWN" — classify the call itself: use "FIRE" for alarm activations, structure fires, vehicle fires, brush fires, hazmat, or any other fire-related call; use "EMS" for medical calls, injuries, difficulty breathing, rescues, or anything involving a person's health/condition; use "UNKNOWN" for anything that doesn't clearly fall into either of those
+- priority: string, one of exactly: "High", "Medium", "Low", "Unknown"
 - notes: string (any other relevant detail, max 1 sentence)
 
 If the transcript is static, silence, or contains no real dispatch content return exactly: null
@@ -658,12 +664,6 @@ def get_fire_stats():
                  .gte("created_at", today_start_utc)
                  .execute()).count or 0
 
-        high = (db.table(FIRE_INCIDENT_TABLE)
-                .select("id", count="exact")
-                .gte("created_at", today_start_utc)
-                .eq("priority", "FIRE")
-                .execute()).count or 0
-
         rows = (db.table(FIRE_INCIDENT_TABLE)
                 .select("units, time_str, created_at, incident_type")
                 .gte("created_at", today_start_utc)
@@ -688,7 +688,6 @@ def get_fire_stats():
         return jsonify({
             "total": total,
             "all_time": all_time,
-            "high": high,
             "units": len(all_units),
             "last_call": last_call,
             "rate": rate,
@@ -696,7 +695,7 @@ def get_fire_stats():
         })
     except Exception as e:
         print(f"[fire] Stats error: {e}", flush=True)
-        return jsonify({"total": 0, "all_time": 0, "high": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
+        return jsonify({"total": 0, "all_time": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
 
 
 def fire_fetch_playlist() -> list[str]:
@@ -856,7 +855,7 @@ Otherwise, respond ONLY with a valid JSON object with these exact fields:
   - If a numbered address is present anywhere in the transcript, always prefer it over any bare street name or intersection.
   - Only return a bare street name or intersection (no house number) if NO numbered address is mentioned anywhere in the transcript.
 - units: array of strings (unit numbers or call signs mentioned, empty array if none)
-- priority: string, one of exactly: "High", "Medium", "Low", "Unknown"
+- priority: string, one of exactly: "FIRE", "EMS", "UNKNOWN" — classify the call itself: use "FIRE" for alarm activations, structure fires, vehicle fires, brush fires, hazmat, or any other fire-related call; use "EMS" for medical calls, injuries, difficulty breathing, rescues, or anything involving a person's health/condition; use "UNKNOWN" for anything that doesn't clearly fall into either of those
 - notes: string (any other relevant detail, max 1 sentence)
 
 Return raw JSON only. No markdown, no explanation, no code blocks."""
