@@ -855,7 +855,12 @@ Rules — return exactly the word null (no quotes, no JSON) if ANY of these appl
 
 Otherwise, respond ONLY with a valid JSON object with these exact fields:
 - incident_type: string (e.g. "Structure Fire", "Vehicle Fire", "Brush Fire", "EMS - Medical", "MVA", "Alarm Activation", "Rescue", "Hazmat", "Mutual Aid", "Unknown")
-- location: string (address or intersection mentioned, or "Unknown")
+- location: string — the SINGLE primary dispatch address ONLY, or "Unknown". Rules for this field:
+  - Return exactly ONE house/building number plus ONE street name, e.g. "1551 Charles Gate Circle" or "12976 Main Road". Nothing else.
+  - Do NOT append cross streets, nearby landmarks, business names, or "between X and Y" reference points, even if the transcript mentions them — e.g. if the transcript says "12976 Main Road at McDonald's between South Newstead and Buell Street", return only "12976 Main Road".
+  - Do NOT concatenate multiple streets or addresses with "and"/"," even if several are mentioned in the same transmission — e.g. if the transcript says "1551 Charles Gate Circle, Old Oak Post Road and Greenwood Drive", return only "1551 Charles Gate Circle" (the actual numbered address, not the unnumbered streets near it).
+  - If a numbered address is present anywhere in the transcript, always prefer it over any bare street name or intersection.
+  - Only return a bare street name or intersection (no house number) if NO numbered address is mentioned anywhere in the transcript.
 - units: array of strings (unit numbers or call signs mentioned, empty array if none)
 - priority: string, one of exactly: "High", "Medium", "Low", "Unknown"
 - notes: string (any other relevant detail, max 1 sentence)
