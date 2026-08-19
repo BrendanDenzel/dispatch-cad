@@ -81,12 +81,6 @@ def get_stats():
                  .gte("created_at", today_start_utc)
                  .execute()).count or 0
 
-        high = (db.table("incidents")
-                .select("id", count="exact")
-                .gte("created_at", today_start_utc)
-                .eq("priority", "High")
-                .execute()).count or 0
-
         rows = (db.table("incidents")
                 .select("units, time_str, created_at, incident_type")
                 .gte("created_at", today_start_utc)
@@ -108,18 +102,18 @@ def get_stats():
             t = r.get("incident_type") or "Unknown"
             types[t] = types.get(t, 0) + 1
 
-        return jsonify({
+    return jsonify({
             "total": total,
             "all_time": all_time,
-            "high": high,
             "units": len(all_units),
             "last_call": last_call,
             "rate": rate,
             "breakdown": types
         })
+    
     except Exception as e:
         print(f"Stats error: {e}", flush=True)
-        return jsonify({"total": 0, "all_time": 0, "high": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
+        return jsonify({"total": 0, "all_time": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
 
 
 # ─────────────────────────────────────────────
