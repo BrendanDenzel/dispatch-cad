@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Amherst Fire Control — CAD</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" crossorigin=""/>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -213,63 +212,7 @@ audio{display:none;}
   .svc-toggle{display:none;}
   .svc-toggle-mobile{display:block;}
 }
-@media(min-width:581px) and (max-width:860px){.stats .stat:nth-child(5){display:none;}}
-
-/* Map view button — desktop topbar */
-.map-view-btn{display:flex;align-items:center;gap:6px;margin-left:10px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:6px 12px;border-radius:4px;cursor:pointer;font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.3px;transition:all .15s;flex-shrink:0;}
-.map-view-btn svg{width:13px;height:13px;fill:currentColor;flex-shrink:0;}
-.map-view-btn:hover{border-color:var(--blue);color:var(--blue-bright);}
-
-/* Map overlay — desktop popup, also driven by the mobile "Map" tab */
-.map-overlay{display:none;position:fixed;inset:0;background:var(--bg);z-index:7000;flex-direction:column;}
-.map-overlay.open{display:flex;}
-.map-overlay-hdr{display:flex;align-items:center;gap:14px;padding:12px 18px;background:var(--panel);border-bottom:2px solid var(--blue);flex-shrink:0;flex-wrap:wrap;}
-.map-overlay-title-wrap{display:flex;flex-direction:column;line-height:1.3;}
-.map-overlay-title{font-size:15px;font-weight:700;color:#fff;}
-.map-overlay-sub{font-size:10px;color:var(--text2);font-family:var(--mono);letter-spacing:.5px;}
-.map-legend{display:flex;align-items:center;gap:10px;margin-left:auto;}
-.map-legend-item{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;}
-.map-legend-item .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
-.map-legend-item .dot.high{background:var(--red-bright);}
-.map-legend-item .dot.medium{background:var(--amber-bright);}
-.map-legend-item .dot.low{background:var(--green-bright);}
-.map-legend-item .dot.unknown{background:var(--text3);}
-#big-map{flex:1;min-height:0;background:var(--panel3);}
-.map-panel{display:flex;flex-direction:column;flex:1;min-height:0;width:100%;height:100%;}
-#view-map{display:none;}
-.leaflet-popup-content-wrapper{background:var(--panel2)!important;color:var(--text)!important;border:1px solid var(--border2);border-radius:4px!important;}
-.leaflet-popup-tip{background:var(--panel2)!important;}
-.leaflet-container{background:var(--panel3)!important;}
-.leaflet-control-attribution{background:rgba(19,22,28,.8)!important;color:var(--text3)!important;font-size:9px!important;}
-.leaflet-control-attribution a{color:var(--text2)!important;}
-.leaflet-control-zoom a{background:var(--panel2)!important;color:var(--text)!important;border-color:var(--border2)!important;}
-.leaflet-control-zoom a:hover{background:var(--panel3)!important;}
-.map-popup-card{transition:opacity .1s;}
-.map-popup-card:hover{opacity:.75;}
-
-/* "My Location" button — sits in the map overlay header */
-.my-loc-btn{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:6px 12px;border-radius:4px;cursor:pointer;font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.3px;transition:all .15s;flex-shrink:0;}
-.my-loc-btn svg{width:13px;height:13px;fill:currentColor;flex-shrink:0;}
-.my-loc-btn:hover{border-color:var(--svc-police);color:#5ea1e6;}
-.my-loc-btn:disabled{opacity:.5;cursor:default;}
-@media(max-width:580px){ .my-loc-btn span{display:none;} .my-loc-btn{padding:6px 8px;} }
-
-/* Breathing blue "you are here" dot, Google-Maps style — a soft halo that
-   slowly expands/fades (the "exhale") behind a small solid core that
-   itself breathes slightly larger/smaller in sync. */
-.user-loc-marker{position:relative;width:22px;height:22px;}
-.user-loc-breathe{position:absolute;inset:0;border-radius:50%;background:rgba(45,125,210,.35);animation:userLocBreathe 2.6s ease-in-out infinite;}
-.user-loc-core{position:absolute;top:5px;left:5px;width:12px;height:12px;border-radius:50%;background:#2d7dd2;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.45);animation:userLocCore 2.6s ease-in-out infinite;}
-@keyframes userLocBreathe{0%,100%{transform:scale(.85);opacity:.55;}50%{transform:scale(1.35);opacity:.15;}}
-@keyframes userLocCore{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
-@media(max-width:580px){
-  .map-view-btn{display:none;}
-  .map-overlay-hdr{padding:10px 12px;gap:8px;}
-  .map-overlay-title{font-size:13px;}
-  .map-legend{gap:7px;}
-  .map-close-btn{display:none;}
-  .map-overlay{padding-bottom:0;}
-}
+@media(min-width:581px) and (max-width:860px){.stats .stat:nth-child(4){display:none;}}
 
 /* Pull-to-refresh — mobile "Active Calls" feed */
 .ptr-wrap{
@@ -310,10 +253,6 @@ audio{display:none;}
   <a href="index.html" class="police">Police</a>
   <a href="fire.html" class="fire active">Fire</a>
 </div>
-  <button class="map-view-btn" onclick="openMapOverlay()" title="View incident map">
-    <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-    <span>View Map</span>
-  </button>
 </div>
 </div>
 
@@ -330,7 +269,6 @@ audio{display:none;}
 <div class="stats">
   <div class="stat"><div class="stat-lbl">Total Today</div><div class="stat-n c-blue" id="stat-total">0</div></div>
   <div class="stat"><div class="stat-lbl">Priority 1</div><div class="stat-n c-red" id="stat-high">0</div></div>
-  <div class="stat"><div class="stat-lbl">Units Active</div><div class="stat-n c-green" id="stat-units">0</div></div>
   <div class="stat"><div class="stat-lbl">Last Call</div><div class="stat-n c-amber" id="stat-last">—</div></div>
   <div class="stat"><div class="stat-lbl">Calls / Hr</div><div class="stat-n c-blue" id="stat-rate">0</div></div>
 </div>
@@ -348,7 +286,6 @@ audio{display:none;}
     <div class="bkdn"><div class="bkdn-ttl">Call Types</div><div id="breakdown-list"></div></div>
     <div class="tx-feed" id="transcript-feed"></div>
   </div>
-  <div class="feed-col" id="view-map"></div>
 </div>
 
 <div class="mob-nav">
@@ -360,10 +297,6 @@ audio{display:none;}
     <button class="mnb" id="mnb-rad" onclick="mobTab('side')">
       <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
       <span class="mnb-lbl">Radio</span>
-    </button>
-    <button class="mnb" id="mnb-map" onclick="openMapOverlay()">
-      <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-      <span class="mnb-lbl">Map</span>
     </button>
   </div>
 </div>
@@ -388,9 +321,6 @@ audio{display:none;}
   </div>
 </div>
 
-<div class="map-overlay" id="map-overlay"></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin=""></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <script>
 // ── Point this at wherever fire_server.py is deployed (a separate service
@@ -399,7 +329,6 @@ const API = 'https://dispatch-cad.onrender.com/fire/incidents';
 const LOG_API = 'https://dispatch-cad.onrender.com/fire/radio-log';
 const STATS_API = 'https://dispatch-cad.onrender.com/fire/stats';
 const STREAM_API = 'https://dispatch-cad.onrender.com/fire/stream';
-const GEOCODE_API = 'https://dispatch-cad.onrender.com/fire/geocode';
 
 // ── State ──────────────────────────────────────────────────────────────────
 let knownIds     = new Set();
@@ -511,7 +440,7 @@ const KEYWORD_BANK = {
   "in her fire": "Amherst Fire",
   "smyter": "Snyder",
   "smeider": "Snyder",
-  "sneider": "Sydner",
+  "sneider": "Snyder",
   "now has fire": "Amherst Fire",
   "amherst fire": "Amherst Fire",
   "side area": "Snyder",
@@ -523,14 +452,13 @@ const KEYWORD_BANK = {
   "shrove": "road",
   "box berline": "Larkspur",
   "Larkes, Berlin": "Larkspur",
-  "Beggartsville": "Eggersville",
-  "Packardsville": "Eggersville",
+  "Beggartsville": "Eggertsville",
+  "Packardsville": "Eggertsville",
   "Allenhurst Fire": "Amherst Fire",
   "Snider": "Snyder",
   "topps": "Tops",
   "Tameric": "Amherst",
   "East Tamer": "East Amherst",
-  "West Tamer": "East Amherst",
   "Damhurst": "Amherst",
   "Rowe Road": "Roll Road",
   "Windows 0A": "Williamsville",
@@ -568,9 +496,9 @@ const KEYWORD_BANK = {
   "king west, balinger": "Westphalinger",
   "queen west challenger": "Westphalinger",
   "and report": "Amherst Fire",
-  "Recyclico": "Eggersville",
-  "Aggersol": "Eggersville",
-  "Aggersville": "Eggersville",
+  "Recyclico": "Eggertsville",
+  "Aggersol": "Eggertsville",
+  "Aggersville": "Eggertsville",
   "trust me": "chest pain",
   "MF": "EMS",
   "I guess we'll do": "Eggertsville",
@@ -616,29 +544,74 @@ function normalizeLocationText(text) {
   return collapseNumberDashes(applyKeywordBank(text || ''));
 }
 
-// ── Geocode cache (proxied through the backend) ────────────────────────
-// The frontend never talks to Supabase directly for this — it hits these
-// two backend routes, which hold the Supabase URL/key server-side. See
-// GET/POST /fire/geocode in main.py.
-async function getCachedCoords(key) {
-  try {
-    const res = await fetch(`${GEOCODE_API}?location=${encodeURIComponent(key)}`);
-    if (res.status === 404) return null;
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data || data.lat == null || data.lng == null) return null;
-    return [data.lat, data.lng];
-  } catch(e) { return null; }
+// ── Address validation ──────────────────────────────────────────────────
+// Only skip the incident card if the location is unknown/empty. No format
+// check is applied — any non-empty, non-"unknown" location is accepted.
+function isValidAddress(rawLoc) {
+  if (!rawLoc) return false;
+  const loc = normalizeLocationText(rawLoc).trim();
+  if (!loc || loc.length < 5) return false;
+  if (/^unknown/i.test(loc)) return false;
+  return true;
 }
 
-async function saveCachedCoords(key, coords) {
-  try {
-    await fetch(GEOCODE_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ location: key, lat: coords[0], lng: coords[1] })
-    });
-  } catch(e) { console.error('geocode cache save failed', e); }
+// ── Known Fire Departments / Stations ────────────────────────────────────
+// Add every department/station name that could respond to a call here.
+// getStationLabel() scans (in order: unit field, then transcript, then
+// notes — whichever has text) for the FIRST department on this list it
+// finds, case-insensitive, whole-word. "aliases" covers alternate spellings
+// that show up after the keyword bank runs (e.g. both "Eggertsville" and
+// "Eggertsville" appear as keyword-bank targets elsewhere in this file).
+//
+// ORDER MATTERS: a multi-word name that CONTAINS another entry on this list
+// must come first, or the shorter one will match inside it — e.g. "East
+// Amherst" has to be checked before plain "Amherst", since "\bAmherst\b"
+// would otherwise match the "Amherst" inside "East Amherst" first.
+//
+// If nothing on this list is heard anywhere in the call, the department
+// shows as "NA".
+const DEPARTMENT_LIST = [
+  { label: "East Amherst FD",   aliases: ["East Amherst"] },
+  { label: "Eggertsville FD",   aliases: ["Eggertsville"] },
+  { label: "Getzville FD",      aliases: ["Getzville"] },
+  { label: "Williamsville FD",  aliases: ["Williamsville, Hutchinson Hose, Hutchinson"] },
+  { label: "Swormsville FD",    aliases: ["Swormsville"] },
+  { label: "Harris Hill FD",    aliases: ["Harris Hill"] },
+  { label: "Newstead FD",       aliases: ["Newstead"] },
+  { label: "Clarence FD",       aliases: ["Clarence"] },
+  { label: "Akron FD",          aliases: ["Akron"] },
+  { label: "Snyder FD",         aliases: ["Snyder"] },
+  { label: "Main Transit FD",   aliases: ["Main Transit"] },
+  { label: "Ellicott Creek FD", aliases: ["Ellicott Creek"] },
+  { label: "Rapids Fire FD",    aliases: ["Rapids Fire, Rapid, Rapids"] },
+  { label: "North Amherst FD",  aliases: ["North Amherst"] },
+  { label: "Clarence Center F", aliases: ["Clarence Center"] },
+  { label: "North Bailey FD",   aliases: ["North Bailey, Bailey"] },
+
+  
+];
+
+function findDepartmentInText(rawText) {
+  if (!rawText) return null;
+  const text = applyKeywordBank(String(rawText));
+  for (const dept of DEPARTMENT_LIST) {
+    for (const alias of dept.aliases) {
+      const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`\\b${escaped}\\b`, 'i');
+      if (re.test(text)) return dept.label;
+    }
+  }
+  return null;
+}
+
+function getStationLabel(inc) {
+  // 1. Units field first — short and usually the clearest signal.
+  for (const u of (inc.units || [])) {
+    const found = findDepartmentInText(u);
+    if (found) return found;
+  }
+  // 2. Fall back to scanning the full transcript, then the notes.
+  return findDepartmentInText(inc.transcript) || findDepartmentInText(inc.notes) || 'NA';
 }
 
 // The radio log is unstructured — we still split each stored transcript
@@ -744,11 +717,6 @@ function toggleAudio() {
 
 // ── Mobile tabs ────────────────────────────────────────────────────────────
 function mobTab(tab) {
-  // Tapping Calls or Radio backs out of the map view, if it's open.
-  document.getElementById('view-map').style.display = 'none';
-  const mm = document.getElementById('mnb-map');
-  if (mm) mm.classList.remove('active');
-
   const feed = document.getElementById('view-feed');
   const side = document.getElementById('view-side');
   const bi = document.getElementById('mnb-inc'), br = document.getElementById('mnb-rad');
@@ -768,7 +736,6 @@ async function fetchStats() {
     const s = await res.json();
     document.getElementById('stat-total').textContent = s.total;
     document.getElementById('stat-high').textContent  = s.high;
-    document.getElementById('stat-units').textContent = s.units;
     document.getElementById('stat-last').textContent  = formatLastCall(s.last_call);
     document.getElementById('stat-rate').textContent  = s.rate;
     document.getElementById('incident-count').textContent = `${s.all_time} total · ${allIncidents.length} loaded`;
@@ -825,7 +792,7 @@ function makeIncidentId(inc) {
 // ── Render incident row ────────────────────────────────────────────────────
 function renderRow(inc) {
   const pc = pClass(inc.priority);
-  const units = (inc.units||[]).map(u=>`<span class="unit-chip">${escHtml(u)}</span>`).join('');
+  const station = `<span class="unit-chip">${escHtml(getStationLabel(inc))}</span>`;
   const priLabel = {high:'Priority 1',medium:'Priority 2',low:'Priority 3',unknown:'Unknown'}[pc]||inc.priority;
   const audioBadge = inc.audio_url
     ? `<span class="audio-badge"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>Audio</span>`
@@ -835,7 +802,7 @@ function renderRow(inc) {
     <div class="irow-body">
       <div class="irow-top"><div class="irow-type">${escHtml(inc.incident_type||'Unknown')}</div><div class="irow-time">${escHtml(inc.time_str||'')}</div></div>
       <div class="irow-loc"><svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>${escHtml(normalizeLocationText(inc.location)||'Location Unknown')}</div>
-      <div class="irow-foot"><span class="pri-tag ${pc}">${escHtml(priLabel)}</span>${units}${audioBadge}</div>
+      <div class="irow-foot"><span class="pri-tag ${pc}">${escHtml(priLabel)}</span>${station}${audioBadge}</div>
       ${inc.notes?`<div class="irow-notes">${escHtml(applyKeywordBank(inc.notes))}</div>`:''}
     </div>
     <div class="irow-arr">›</div>
@@ -975,10 +942,7 @@ function openModal(id) {
   const createdFull = inc.created_at
     ? new Date(inc.created_at).toLocaleString('en-US',{timeZone:'America/New_York',hour12:false})
     : '—';
-  const units = inc.units || [];
-  const unitChips = units.length
-    ? units.map(u=>`<span class="m-chip">${escHtml(u)}</span>`).join('')
-    : '<span style="color:var(--text3);font-size:11px;">—</span>';
+  const stationChip = `<span class="m-chip">${escHtml(getStationLabel(inc))}</span>`;
   const loc = normalizeLocationText(inc.location) || 'Unknown';
   const locIsKnown = loc !== 'Unknown' && loc !== 'Unknown Location' && loc.length > 3;
   const locCell = locIsKnown
@@ -1002,7 +966,7 @@ function openModal(id) {
         <tr><td>Type</td><td>${escHtml(inc.incident_type||'Unknown')}</td></tr>
         <tr><td>Priority</td><td><div class="m-pri"><div class="m-pri-dot" style="background:var(--${pc==='high'?'red':pc==='medium'?'amber':pc==='low'?'green':'text3'}-bright)"></div>${escHtml(priLabel)}</div></td></tr>
         <tr><td>Location</td><td>${locCell}</td></tr>
-        <tr><td>Units Assigned</td><td><div class="m-chips">${unitChips}</div></td></tr>
+        <tr><td>Fire Department</td><td><div class="m-chips">${stationChip}</div></td></tr>
         <tr><td>Notes</td><td>${escHtml(applyKeywordBank(inc.notes||'')||'—')}</td></tr>
       </table>
     </div>
@@ -1032,263 +996,8 @@ function closeModalDirect() {
   document.getElementById('modal-overlay').classList.remove('open');
 }
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModalDirect(); closeMapOverlay(); }
+  if (e.key === 'Escape') { closeModalDirect(); }
 });
-
-// ── Incident map (Leaflet + OpenStreetMap/Nominatim, no API key needed) ────
-const geocodeCache      = {};
-const mappedIncidentIds = new Set();
-const AMHERST_CENTER    = [42.9786, -78.7998];
-let bigMap        = null;
-let bigMapMarkers  = {};
-let isGeocoding    = false;
-
-function hasKnownLocation(loc) {
-  return !!loc && loc !== 'Unknown' && loc !== 'Unknown Location' && loc.trim().length > 3;
-}
-
-async function geocodeLocation(rawLoc) {
-  const loc = normalizeLocationText(rawLoc);
-  const key = loc.trim().toLowerCase();
-  if (!key) return null;
-  if (geocodeCache[key]) return geocodeCache[key];
-
-  // 1. Check the backend's geocode cache first — no need to re-hit Nominatim
-  //    for a location we've already resolved (this is what makes the map
-  //    open fast). The backend holds the Supabase credentials, not us.
-  const cached = await getCachedCoords(key);
-  if (cached) { geocodeCache[key] = cached; return cached; }
-
-  // 2. Miss — try progressively looser query variants against Nominatim
-  //    until one resolves (facility names, cross-streets, etc. often need
-  //    the full string stripped down to just "street, Amherst, NY").
-  const candidates = buildGeocodeCandidates(loc);
-  for (const q of candidates) {
-    const coords = await tryNominatim(q);
-    if (coords) {
-      geocodeCache[key] = coords;
-      saveCachedCoords(key, coords); // fire-and-forget, don't block
-      return coords;
-    }
-    await new Promise(r => setTimeout(r, 300)); // respect Nominatim's ~1req/sec policy
-  }
-  return null;
-}
-
-// Builds a set of query strings to try, loosest-first-successful-wins:
-// 1) the location as given
-// 2) the street-address part after a leading "Facility Name, " prefix
-// 3) everything before " between X and Y"
-// 4) #3 with "at Block NN" stripped out too
-function buildGeocodeCandidates(loc) {
-  const out = [loc];
-
-  const afterComma = loc.match(/,\s*(\d+.*)$/);
-  if (afterComma) out.push(afterComma[1].trim());
-
-  const beforeBetween = loc.split(/\s+between\s+/i)[0].trim();
-  if (beforeBetween && beforeBetween !== loc) out.push(beforeBetween);
-
-  const noBlock = beforeBetween.replace(/\bat\s+block\s*\d+\b[, ]*/gi, '').trim();
-  if (noBlock && noBlock !== beforeBetween) out.push(noBlock);
-
-  return [...new Set(out.map(s => s.trim()).filter(Boolean))];
-}
-
-async function tryNominatim(q) {
-  const query = encodeURIComponent(`${q}, Amherst, NY`);
-  // Bias (not hard-bound) toward Amherst/Erie County — a generous box so
-  // addresses near the town line (Getzville, Williamsville, etc.) still hit.
-  const viewbox = '-79.05,43.15,-78.55,42.80';
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&viewbox=${viewbox}&q=${query}`;
-  try {
-    const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data && data.length) {
-      return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-    }
-  } catch(e) { console.error('geocode failed', q, e); }
-  return null;
-}
-
-function priorityColor(p) {
-  const pc = pClass(p);
-  return { high:'#e74c3c', medium:'#f39c12', low:'#27ae60', unknown:'#4a5568' }[pc] || '#4a5568';
-}
-
-function makeMapIcon(priority) {
-  const color = priorityColor(priority);
-  return L.divIcon({
-    className: 'cad-map-marker',
-    html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #0c0e12;box-shadow:0 0 0 3px ${color}40;"></div>`,
-    iconSize: [14,14],
-    iconAnchor: [7,7],
-    popupAnchor: [0,-10]
-  });
-}
-
-// The map panel (header + #big-map) is a single DOM node that gets moved
-// between the desktop full-screen popup and the mobile in-flow tab, so
-// there's only ever one Leaflet instance and it always lives inside
-// normal document flow (no fixed-overlay vs. persistent-bar overlap).
-const mapPanel = document.createElement('div');
-mapPanel.className = 'map-panel';
-mapPanel.innerHTML = `
-  <div class="map-overlay-hdr">
-    <div class="map-overlay-title-wrap">
-      <div class="map-overlay-title">Incident Map</div>
-      <div class="map-overlay-sub">Last 24 Hours · <span id="map-stat-count">0 mapped</span></div>
-    </div>
-    <div class="map-legend">
-      <span class="map-legend-item"><i class="dot high"></i>P1</span>
-      <span class="map-legend-item"><i class="dot medium"></i>P2</span>
-      <span class="map-legend-item"><i class="dot low"></i>P3</span>
-      <span class="map-legend-item"><i class="dot unknown"></i>Unk</span>
-    </div>
-    <button class="my-loc-btn" id="my-location-btn" onclick="requestUserLocation()" title="Show my location">
-      <svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 100 8 4 4 0 000-8zm9-1h-2.06A7.003 7.003 0 0013 3.06V1h-2v2.06A7.003 7.003 0 004.06 7H2v2h2.06A7.003 7.003 0 0011 20.94V23h2v-2.06A7.003 7.003 0 0020.94 13H23v-2h-2.06A7.003 7.003 0 0021 7z"/></svg>
-      <span>My Location</span>
-    </button>
-    <button class="modal-close map-close-btn" onclick="closeMapOverlay()">✕</button>
-  </div>
-  <div id="big-map"></div>
-`;
-
-function initBigMap() {
-  if (bigMap) return;
-  const mapEl = mapPanel.querySelector('#big-map');
-  bigMap = L.map(mapEl, { zoomControl: true, attributionControl: true }).setView(AMHERST_CENTER, 12);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-    subdomains: 'abcd',
-    maxZoom: 19
-  }).addTo(bigMap);
-}
-
-// ── "My Location" — asks for geolocation permission, then drops/updates a
-// breathing blue dot (Google-Maps style) at the user's position and centers
-// the map on it. Nothing is requested until the button is tapped.
-let userLocationMarker = null;
-
-function myLocationBtnHTML() {
-  return `<svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 100 8 4 4 0 000-8zm9-1h-2.06A7.003 7.003 0 0013 3.06V1h-2v2.06A7.003 7.003 0 004.06 7H2v2h2.06A7.003 7.003 0 0011 20.94V23h2v-2.06A7.003 7.003 0 0020.94 13H23v-2h-2.06A7.003 7.003 0 0021 7z"/></svg><span>My Location</span>`;
-}
-
-function requestUserLocation() {
-  const btn = document.getElementById('my-location-btn');
-  if (!navigator.geolocation) {
-    alert('Geolocation is not supported by this browser.');
-    return;
-  }
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span>Locating…</span>'; }
-
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const { latitude, longitude } = pos.coords;
-      placeUserLocationMarker(latitude, longitude);
-      if (bigMap) bigMap.setView([latitude, longitude], 15);
-      if (btn) { btn.disabled = false; btn.innerHTML = myLocationBtnHTML(); }
-    },
-    (err) => {
-      console.error('geolocation error', err);
-      if (btn) { btn.disabled = false; btn.innerHTML = myLocationBtnHTML(); }
-      if (err.code === err.PERMISSION_DENIED) {
-        alert('Location permission was denied. Enable location access for this site in your browser settings to show your position on the map.');
-      } else {
-        alert('Could not determine your location. Please try again.');
-      }
-    },
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
-  );
-}
-
-function placeUserLocationMarker(lat, lng) {
-  if (!bigMap) return;
-  const icon = L.divIcon({
-    className: 'user-loc-marker-wrap',
-    html: `<div class="user-loc-marker"><div class="user-loc-breathe"></div><div class="user-loc-core"></div></div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11]
-  });
-  if (userLocationMarker) {
-    userLocationMarker.setLatLng([lat, lng]);
-  } else {
-    userLocationMarker = L.marker([lat, lng], { icon, zIndexOffset: 1000, interactive: false }).addTo(bigMap);
-  }
-}
-
-// Geocodes and drops a pin for every not-yet-mapped incident from the last 24 hours.
-async function renderMapMarkers() {
-  if (isGeocoding || !bigMap) return;
-  isGeocoding = true;
-  const cutoff = Date.now() - 24*60*60*1000;
-  const eligible = allIncidents.filter(inc =>
-    inc.created_at &&
-    new Date(inc.created_at).getTime() >= cutoff &&
-    hasKnownLocation(inc.location) &&
-    !mappedIncidentIds.has(String(inc.id))
-  );
-
-  const countEl = document.getElementById('map-stat-count');
-  let mappedTotal = Object.keys(bigMapMarkers).length;
-
-  for (const inc of eligible) {
-    const coords = await geocodeLocation(inc.location);
-    if (coords) {
-      const marker = L.marker(coords, { icon: makeMapIcon(inc.priority) }).addTo(bigMap);
-      const pc = pClass(inc.priority);
-      const priLabel = {high:'Priority 1',medium:'Priority 2',low:'Priority 3',unknown:'Unknown'}[pc] || inc.priority;
-      const dispLoc = normalizeLocationText(inc.location);
-      // Clicking the marker opens ONLY this small popup. Clicking inside the
-      // popup itself is what opens the full incident modal (via the onclick
-      // below), so the two actions stay separate.
-      marker.bindPopup(`<div class="map-popup-card" onclick="openModal(${inc.id})" style="font-family:'JetBrains Mono',monospace;min-width:150px;cursor:pointer;">
-          <div style="font-weight:600;color:#fff;font-size:12px;margin-bottom:2px;">${escHtml(inc.incident_type||'Unknown')}</div>
-          <div style="font-size:10px;color:#8892a0;margin-bottom:4px;">${escHtml(dispLoc)}</div>
-          <div style="font-size:10px;color:${priorityColor(inc.priority)};">${escHtml(priLabel)} · ${escHtml(inc.time_str||'')}</div>
-          <div style="font-size:9px;color:#4a5568;margin-top:5px;border-top:1px solid rgba(255,255,255,.08);padding-top:4px;">↑ tap for full call details</div>
-        </div>`);
-      bigMapMarkers[inc.id] = marker;
-      mappedTotal++;
-    }
-    mappedIncidentIds.add(String(inc.id));
-    if (countEl) countEl.textContent = `${mappedTotal} mapped`;
-  }
-  isGeocoding = false;
-}
-
-function openMapOverlay() {
-  initBigMap();
-  const isMobile = window.innerWidth <= 580;
-
-  if (isMobile) {
-    // Mobile: the map becomes a normal in-flow tab, same as Calls/Radio,
-    // sitting between the scanner/top bars and the bottom nav — no
-    // fixed-overlay, so nothing overlaps the zoom controls.
-    document.getElementById('view-map').appendChild(mapPanel);
-    document.getElementById('view-feed').style.display = 'none';
-    document.getElementById('view-side').classList.remove('mob-show');
-    document.getElementById('view-map').style.display = 'flex';
-
-    document.querySelectorAll('.mnb').forEach(b => b.classList.remove('active'));
-    const mm = document.getElementById('mnb-map');
-    if (mm) mm.classList.add('active');
-  } else {
-    // Desktop: true full-screen popup.
-    document.getElementById('map-overlay').appendChild(mapPanel);
-    document.getElementById('map-overlay').classList.add('open');
-  }
-
-  setTimeout(() => { if (bigMap) bigMap.invalidateSize(); }, 60);
-  renderMapMarkers();
-}
-
-function closeMapOverlay() {
-  // Desktop popup close (X button). On mobile this button is hidden —
-  // tapping the always-visible Calls/Radio tabs backs out via mobTab().
-  document.getElementById('map-overlay').classList.remove('open');
-}
 
 // ── SSE live feed — carries both incident cards and flat log lines ────────
 const sseStream = new EventSource(STREAM_API);
@@ -1301,7 +1010,11 @@ sseStream.onmessage = (event) => {
   if (msg.kind === 'incident') {
     const inc = msg.data;
     if (knownIds.has(String(inc.id))) return;
-    knownIds.add(String(inc.id));
+    knownIds.add(String(inc.id)); // mark seen regardless of validity
+    // No valid "number + street" address — skip the incident card. It's
+    // still audible/readable in the Radio Log panel, which is a separate
+    // feed fed by 'log' messages below.
+    if (!isValidAddress(inc.location)) return;
     incidentMap[String(inc.id)] = inc;
     allIncidents.unshift(inc);
 
@@ -1311,7 +1024,6 @@ sseStream.onmessage = (event) => {
 
     fetchStats();
     showToast(inc);
-    if (document.getElementById('map-overlay').classList.contains('open')) renderMapMarkers();
     return;
   }
 
@@ -1338,11 +1050,14 @@ async function fetchIncidents(offset = 0) {
     const feed = document.getElementById('incident-feed');
     if (offset === 0) { feed.innerHTML = ''; allIncidents = []; knownIds = new Set(); incidentMap = {}; }
 
-    const newOnes = incidents.filter(i => !knownIds.has(String(i.id)));
-    if (newOnes.length === 0 || incidents.length === 0) { allLoaded = true; isLoading = false; return; }
+    if (incidents.length === 0) { allLoaded = true; isLoading = false; return; }
 
-    newOnes.forEach(i => {
-      knownIds.add(String(i.id));
+    // Drop anything with an unknown/empty location — it still appears
+    // normally in the Radio Log panel, just not as an incident card.
+    const unseen = incidents.filter(i => !knownIds.has(String(i.id)));
+    unseen.forEach(i => {
+      knownIds.add(String(i.id)); // mark seen regardless of validity, so it's never re-checked
+      if (!isValidAddress(i.location)) return;
       incidentMap[String(i.id)] = i;
       allIncidents.push(i);
       feed.insertAdjacentHTML('beforeend', renderRow(i));
@@ -1352,7 +1067,6 @@ async function fetchIncidents(offset = 0) {
     else currentOffset = offset + 50;
 
     fetchStats();
-    if (document.getElementById('map-overlay').classList.contains('open')) renderMapMarkers();
   } catch(e) {
     setConn(false);
     console.error(e);
