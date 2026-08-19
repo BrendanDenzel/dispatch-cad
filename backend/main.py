@@ -378,7 +378,7 @@ Respond ONLY with a valid JSON object with these exact fields:
 - incident_type: string (e.g. "MVA", "Domestic", "Theft", "Medical", "Noise Complaint", "Burglary", "Suspicious", "Unknown")
 - location: string (address or intersection mentioned, or "Unknown")
 - units: array of strings (unit numbers or call signs mentioned, empty array if none)
-- priority: string, one of exactly: "High", "Medium", "Low", "Unknown"
+- priority: string, one of exactly: "FIRE", "EMS", "UNKNOWN" — classify the call itself: use "FIRE" for alarm activations, structure fires, vehicle fires, brush fires, hazmat, or any other fire-related call; use "EMS" for medical calls, injuries, difficulty breathing, rescues, or anything involving a person's health/condition; use "UNKNOWN" for anything that doesn't clearly fall into either of those
 - notes: string (any other relevant detail, max 1 sentence)
 
 If the transcript is static, silence, or contains no real dispatch content return exactly: null
@@ -667,7 +667,7 @@ def get_fire_stats():
         high = (db.table(FIRE_INCIDENT_TABLE)
                 .select("id", count="exact")
                 .gte("created_at", today_start_utc)
-                .eq("priority", "High")
+                .eq("priority", "FIRE")
                 .execute()).count or 0
 
         rows = (db.table(FIRE_INCIDENT_TABLE)
