@@ -1098,7 +1098,7 @@ function openModal(id) {
         <tr><td>Incident ID</td><td><span class="m-id">${incId}</span></td></tr>
         <tr><td>Created</td><td>${createdFull} ET</td></tr>
         <tr><td>Type</td><td>${escHtml(inc.incident_type||'Unknown')}</td></tr>
-        <tr><td>Priority</td><td><div class="m-pri"><div class="m-pri-dot" style="background:var(--${pc==='fire'?'red':pc==='ems'?'amber':'text3'}-bright)"></div>
+        <tr><td>Priority</td><td><div class="m-pri"><div class="m-pri-dot" style="background:var(--${pc==='fire'?'red':pc==='ems'?'amber':'text3'}-bright)"></div>${escHtml(priLabel)}</div></td></tr>
         <tr><td>Location</td><td>${locCell}</td></tr>
         <tr><td>Fire Department</td><td><div class="m-chips">${stationChip}</div></td></tr>
         <tr><td>Notes</td><td>${escHtml(formatText(inc.notes||'')||'—')}</td></tr>
