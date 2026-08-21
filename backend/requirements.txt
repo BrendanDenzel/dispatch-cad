@@ -3,3 +3,4 @@ flask-cors
 groq
 supabase
 requests
+numpy
