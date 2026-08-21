@@ -1,4 +1,5 @@
 import os, time, threading, tempfile, json, subprocess, difflib
+import numpy as np
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from urllib.parse import urljoin
@@ -960,7 +961,7 @@ def fire_save_log_entry(transcript: str):
         print(f"[fire] Log save error: {e}", flush=True)
 
 
-def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None):
+def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None, tone_dept: str | None = None):
     try:
         db  = get_db()
         row = {
@@ -972,6 +973,7 @@ def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None):
             "transcript":    transcript,
             "time_str":      datetime.now(EASTERN).strftime("%I:%M %p"),
             "audio_url":     audio_url,
+            "tone_dept":     tone_dept,
         }
         res   = db.table(FIRE_INCIDENT_TABLE).insert(row).execute()
         saved = res.data[0] if res.data else row
@@ -980,6 +982,125 @@ def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None):
         fire_purge_old_incidents()
     except Exception as e:
         print(f"[fire] Save error: {e}", flush=True)
+
+
+# ─── Two-Tone (Quick Call) detection — server-side port of the browser
+# decoder: short-window FFT, judge each slice by how "spiky" its peak is
+# vs. that same slice's own median magnitude (a real tone is a narrow
+# spike regardless of loudness), group consecutive spiky slices into
+# segments, take the first two qualifying segments as tone1/tone2, and
+# match them against the known station tone-pair table below. ────────────
+FIRE_TONE_STATIONS = [
+    {"name": "East Amherst",     "f1": 2689, "f2": 674},
+    {"name": "Eggertsville",     "f1": 387,  "f2": 475},
+    {"name": "Getzville",        "f1": 346,  "f2": 526},
+    {"name": "Williamsville",    "f1": 475,  "f2": 796},
+    {"name": "Swormville",       "f1": 715,  "f2": 1084},
+    {"name": "Harris Hill",      "f1": 715,  "f2": 526},
+    {"name": "Newstead",         "f1": 2689, "f2": 1342},
+    {"name": "Clarence Center",  "f1": 2689, "f2": 797},
+    {"name": "Clarence",         "f1": 2689, "f2": 873},
+    {"name": "Akron",            "f1": 2689, "f2": 1231},
+    {"name": "Snyder",           "f1": 456,  "f2": 580},
+    {"name": "Main Transit",     "f1": 1084, "f2": 475},
+    {"name": "Ellicott Creek",   "f1": 2689, "f2": 1130},
+    {"name": "Rapids Fire",      "f1": 2689, "f2": 949},
+    {"name": "North Bailey",     "f1": 2690, "f2": 732},
+]
+TONE_FREQ_MIN, TONE_FREQ_MAX = 200, 3200
+TONE_SHARPNESS_THRESH = 7.0
+TONE_MIN_DURATION_SEC = 0.45
+TONE_MATCH_TOLERANCE  = 0.03
+
+
+def _tone_decode_pcm(audio_bytes: bytes, sr: int = 8000):
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        f.write(audio_bytes)
+        in_path = f.name
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", in_path,
+             "-ac", "1", "-ar", str(sr), "-f", "s16le", "-"],
+            capture_output=True, timeout=30
+        )
+        if result.returncode != 0 or not result.stdout:
+            return None
+        return np.frombuffer(result.stdout, dtype="<i2").astype(np.float32) / 32768.0
+    except Exception as e:
+        print(f"[tone] pcm decode failed: {e}", flush=True)
+        return None
+    finally:
+        os.unlink(in_path)
+
+
+def _tone_track(pcm, sr):
+    n_time = max(64, int(sr * 0.046))
+    n_fft = 1
+    while n_fft < n_time * 4:
+        n_fft <<= 1
+    hop = max(16, int(sr * 0.0116))
+    window = np.hanning(n_time)
+    freqs = np.fft.rfftfreq(n_fft, d=1.0 / sr)
+    lo, hi = np.searchsorted(freqs, TONE_FREQ_MIN), np.searchsorted(freqs, TONE_FREQ_MAX)
+
+    track = []
+    for start in range(0, len(pcm) - n_time, hop):
+        spec = np.abs(np.fft.rfft(pcm[start:start + n_time] * window, n=n_fft))[lo:hi]
+        if spec.size == 0:
+            continue
+        peak_idx = int(np.argmax(spec))
+        median = np.median(spec) or 1e-9
+        track.append({"t": start / sr, "freq": freqs[lo + peak_idx], "peakiness": spec[peak_idx] / median})
+    return track
+
+
+def _group_tone_segments(track):
+    segs, cur, gap = [], None, 0
+
+    def close(seg):
+        fs = [p["freq"] for p in seg["points"]]
+        segs.append({"start": seg["start"], "end": seg["points"][-1]["t"],
+                     "duration": seg["points"][-1]["t"] - seg["start"], "freq": sum(fs) / len(fs)})
+
+    for pt in track:
+        if pt["peakiness"] >= TONE_SHARPNESS_THRESH:
+            if cur and abs(pt["freq"] - cur["avg"]) / cur["avg"] <= 0.03:
+                cur["points"].append(pt)
+                cur["avg"] = sum(p["freq"] for p in cur["points"]) / len(cur["points"])
+                gap = 0
+            else:
+                if cur: close(cur)
+                cur, gap = {"start": pt["t"], "avg": pt["freq"], "points": [pt]}, 0
+        elif cur:
+            gap += 1
+            if gap > 3:
+                close(cur); cur, gap = None, 0
+    if cur:
+        close(cur)
+    return [s for s in segs if s["duration"] >= TONE_MIN_DURATION_SEC]
+
+
+def detect_two_tone_department(audio_bytes: bytes) -> str | None:
+    """Returns the matched station NAME if the clip's first two qualifying
+    tone segments match a known department's tone pair within tolerance,
+    else None."""
+    try:
+        sr = 8000
+        pcm = _tone_decode_pcm(audio_bytes, sr)
+        if pcm is None or len(pcm) < sr * 0.5:
+            return None
+        segs = _group_tone_segments(_tone_track(pcm, sr))
+        if len(segs) < 2:
+            return None
+        tone1, tone2 = segs[0]["freq"], segs[1]["freq"]
+        for st in FIRE_TONE_STATIONS:
+            if (abs(tone1 - st["f1"]) / st["f1"] <= TONE_MATCH_TOLERANCE and
+                abs(tone2 - st["f2"]) / st["f2"] <= TONE_MATCH_TOLERANCE):
+                return st["name"]
+        return None
+    except Exception as e:
+        print(f"[tone] detection error: {e}", flush=True)
+        return None
 
 
 def fire_process_audio_chunk(audio: bytes):
@@ -993,6 +1114,10 @@ def fire_process_audio_chunk(audio: bytes):
         raw_dur = get_duration(audio)
         trimmed_dur = get_duration(trimmed)
         print(f"[fire] trim result: {raw_dur:.1f}s raw -> {trimmed_dur:.1f}s trimmed", flush=True)
+
+        tone_dept = detect_two_tone_department(trimmed)
+        if tone_dept:
+            print(f"[fire] two-tone match: {tone_dept}", flush=True)
 
         print("[fire] Transcribing...", flush=True)
         transcript = fire_transcribe(trimmed)
@@ -1025,7 +1150,7 @@ def fire_process_audio_chunk(audio: bytes):
         # Only now, once we know it's a genuine new call, keep the audio.
         print("[fire] Uploading audio for confirmed new incident...", flush=True)
         audio_url = fire_upload_audio(trimmed)
-        fire_save_incident(parsed, transcript, audio_url)
+        fire_save_incident(parsed, transcript, audio_url, tone_dept)
 
     except Exception as e:
         import traceback
