@@ -1092,7 +1092,10 @@ def detect_two_tone_department(audio_bytes: bytes) -> str | None:
         segs = _group_tone_segments(_tone_track(pcm, sr))
         if len(segs) < 2:
             return None
-        tone1, tone2 = segs[0]["freq"], segs[1]["freq"]
+        # Use the LAST two qualifying segments in the clip (not the first
+        # two) — segs is time-ordered, so segs[-2] is the second-to-last
+        # tone (treated as tone1) and segs[-1] is the last tone (tone2).
+        tone1, tone2 = segs[-2]["freq"], segs[-1]["freq"]
         for st in FIRE_TONE_STATIONS:
             if (abs(tone1 - st["f1"]) / st["f1"] <= TONE_MATCH_TOLERANCE and
                 abs(tone2 - st["f2"]) / st["f2"] <= TONE_MATCH_TOLERANCE):
