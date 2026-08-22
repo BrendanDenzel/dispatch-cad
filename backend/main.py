@@ -913,6 +913,23 @@ def fire_remember_call(transcript: str):
         _fire_recent_calls.append((time.time(), _fire_normalize(transcript)))
 
 
+# NEW: mirrors the frontend's isValidAddress() check (fire.html) — a
+# location only counts as "real" if it exists, is more than a few
+# characters after trimming, and doesn't just say "Unknown"/"Unknown
+# Location". Used below to decide whether an incident is even worth
+# saving to the database at all, instead of relying on the frontend to
+# hide addressless cards after the fact.
+def fire_is_valid_address(location: str | None) -> bool:
+    if not location:
+        return False
+    loc = location.strip()
+    if len(loc) < 5:
+        return False
+    if loc.lower().startswith("unknown"):
+        return False
+    return True
+
+
 def fire_purge_old_incidents():
     try:
         db    = get_db()
@@ -1179,9 +1196,19 @@ def fire_process_audio_chunk(audio: bytes):
             print("[fire] Not a new dispatch call (chatter/responding) — logged only.", flush=True)
             return
 
+        # Fresh-calls-only gate #3 (NEW): no valid "number + street"
+        # address in the parsed location — don't save an incident row at
+        # all. It's already in the flat radio log above; it just never
+        # becomes an incident card. This replaces relying on the frontend
+        # to hide addressless cards after the fact.
+        if not fire_is_valid_address(parsed.get("location")):
+            print(f"[fire] no valid address ({parsed.get('location')!r}) — not saving incident.", flush=True)
+            return
+
         fire_remember_call(transcript)
 
-        # Only now, once we know it's a genuine new call, keep the audio.
+        # Only now, once we know it's a genuine new call WITH a valid
+        # address, keep the audio.
         print("[fire] Uploading audio for confirmed new incident...", flush=True)
         audio_url = fire_upload_audio(trimmed)
         fire_save_incident(parsed, transcript, audio_url, tone_dept)
