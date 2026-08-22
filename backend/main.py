@@ -1205,6 +1205,15 @@ def fire_process_audio_chunk(audio: bytes):
             print(f"[fire] no valid address ({parsed.get('location')!r}) — not saving incident.", flush=True)
             return
 
+        # Fresh-calls-only gate #4 (NEW): both incident_type AND priority
+        # came back "Unknown" — the parser couldn't classify the call at
+        # all, so it's not worth saving as an incident card.
+        incident_type = (parsed.get("incident_type") or "").strip().lower()
+        priority = (parsed.get("priority") or "").strip().lower()
+        if incident_type == "unknown" and priority == "unknown":
+            print(f"[fire] both type and priority unknown — not saving incident.", flush=True)
+            return
+
         fire_remember_call(transcript)
 
         # Only now, once we know it's a genuine new call WITH a valid
