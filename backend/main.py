@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from urllib.parse import urljoin
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from groq import Groq
@@ -528,6 +529,12 @@ _fire_recent_calls = []  # list of (timestamp, normalized_text)
 _fire_recent_calls_lock = threading.Lock()
 
 fire_groq_client = Groq(api_key=GROQ_API_KEY_BACKUP)
+
+# Shared pool for running tone detection and transcription concurrently
+# in fire_process_audio_chunk (they're independent of each other and can
+# overlap: tone detection is CPU/subprocess-bound, transcription is
+# network/I/O-bound waiting on Groq).
+_fire_concurrency_pool = ThreadPoolExecutor(max_workers=2)
 
 def fire_segment_mean_volume_db(seg_bytes: bytes) -> float:
     """Returns the mean volume (dB) of a single ~4s TS segment via ffmpeg's
@@ -1138,12 +1145,16 @@ def fire_process_audio_chunk(audio: bytes):
         trimmed_dur = get_duration(trimmed)
         print(f"[fire] trim result: {raw_dur:.1f}s raw -> {trimmed_dur:.1f}s trimmed", flush=True)
 
-        tone_dept = detect_two_tone_department(trimmed)
+        # Tone detection and transcription are independent of each other —
+        # run them concurrently instead of sequentially to save time.
+        tone_future = _fire_concurrency_pool.submit(detect_two_tone_department, trimmed)
+        transcript_future = _fire_concurrency_pool.submit(fire_transcribe, trimmed)
+
+        tone_dept = tone_future.result()
         if tone_dept:
             print(f"[fire] two-tone match: {tone_dept}", flush=True)
 
-        print("[fire] Transcribing...", flush=True)
-        transcript = fire_transcribe(trimmed)
+        transcript = transcript_future.result()
         print(f"[fire] Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
 
         if len(transcript.strip()) < 10:
