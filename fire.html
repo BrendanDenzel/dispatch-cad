@@ -781,14 +781,6 @@ function normalizeLocationText(text) {
   return collapseNumberDashes(applyKeywordBank(text || ''));
 }
 
-function isValidAddress(rawLoc) {
-  if (!rawLoc) return false;
-  const loc = normalizeLocationText(rawLoc).trim();
-  if (!loc || loc.length < 5) return false;
-  if (/^unknown/i.test(loc)) return false;
-  return true;
-}
-
 let addressLastShown = {};
 
 function getIncidentTimeMs(inc) {
@@ -819,7 +811,7 @@ const DEPARTMENT_LIST = [
   { label: "Snyder FD",         aliases: ["Snyder"] },
   { label: "Main Transit FD",   aliases: ["Main Transit"] },
   { label: "Ellicott Creek FD", aliases: ["Ellicott Creek"] },
-  { label: "Rapids Fire FD",    aliases: ["Rapids Fire", "Rapid", "Rapids"] },
+  { label: "Rapids Fire FD", aliases: ["Rapids Fire", "Rapid Fire", "Rapid", "Rapids"], excludeAfter: ["Road", "Rd"] },
   { label: "North Amherst FD",  aliases: ["North Amherst"] },
   { label: "North Bailey FD",   aliases: ["North Bailey", "Bailey"] },
 ];
@@ -830,7 +822,14 @@ function findDepartmentInText(rawText) {
   for (const dept of DEPARTMENT_LIST) {
     for (const alias of dept.aliases) {
       const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(`\\b${escaped}\\b`, 'i');
+      let pattern = `\\b${escaped}\\b`;
+      if (dept.excludeAfter && dept.excludeAfter.length) {
+        const excl = dept.excludeAfter
+          .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+          .join('|');
+        pattern += `(?!\\s+(?:${excl})\\b)`;
+      }
+      const re = new RegExp(pattern, 'i');
       if (re.test(text)) return dept.label;
     }
   }
@@ -1404,11 +1403,7 @@ sseStream.onmessage = (event) => {
   if (msg.kind === 'incident') {
     const inc = msg.data;
     if (knownIds.has(String(inc.id))) return;
-    knownIds.add(String(inc.id)); // mark seen regardless of validity
-    // No valid "number + street" address — skip the incident card. It's
-    // still audible/readable in the Radio Log panel, which is a separate
-    // feed fed by 'log' messages below.
-    if (!isValidAddress(inc.location)) return;
+    knownIds.add(String(inc.id));
     if (isDuplicateAddress(inc)) return;
     incidentMap[String(inc.id)] = inc;
     allIncidents.unshift(inc);
@@ -1459,7 +1454,6 @@ async function fetchIncidents(offset = 0) {
     [...unseen]
       .sort((a, b) => getIncidentTimeMs(a) - getIncidentTimeMs(b))
       .forEach(i => {
-        if (!isValidAddress(i.location)) return;
         if (!isDuplicateAddress(i)) keepIds.add(String(i.id));
       });
 
