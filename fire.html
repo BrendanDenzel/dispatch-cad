@@ -234,6 +234,55 @@ audio{display:none;}
 }
 .ptr-spinner.spin{animation:ptrSpin .6s linear infinite;}
 @keyframes ptrSpin{to{transform:rotate(360deg)}}
+
+/* ── Department Leaderboard HUD ─────────────────────────────────────── */
+.stat.clickable{cursor:pointer;transition:background .15s;}
+.stat.clickable:hover{background:var(--panel2);}
+.stat.clickable:active{background:var(--panel3);}
+
+.dept-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:9500;align-items:center;justify-content:center;padding:16px;}
+.dept-modal-overlay.open{display:flex;}
+.dept-modal{background:var(--panel);border:1px solid var(--border2);border-radius:4px;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column;animation:modalIn .2s ease-out;overflow:hidden;}
+.dept-modal-hdr{padding:14px 18px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;background:var(--panel2);flex-shrink:0;}
+.dept-modal-hdr-left{display:flex;align-items:center;gap:10px;}
+.dept-modal-hdr-bar{width:4px;height:30px;border-radius:2px;background:var(--blue-bright);}
+.dept-modal-title{font-size:15px;font-weight:700;color:#fff;}
+.dept-modal-sub{font-size:10.5px;color:var(--text2);margin-top:1px;font-family:var(--mono);}
+.dept-modal-close{background:transparent;border:1px solid var(--border2);color:var(--text2);width:28px;height:28px;border-radius:3px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;}
+.dept-modal-close:hover{border-color:var(--red-bright);color:var(--red-bright);}
+
+.dept-filter-row{display:flex;gap:6px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0;}
+.dept-filter-btn{flex:1;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:7px 4px;border-radius:3px;cursor:pointer;transition:all .15s;text-align:center;}
+.dept-filter-btn:hover{border-color:var(--blue);color:var(--blue-bright);}
+.dept-filter-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;}
+.dept-filter-btn:disabled{opacity:.5;cursor:not-allowed;}
+.dept-loading-row{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px 18px;color:var(--text3);font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;}
+.dept-loading-spin{width:13px;height:13px;border:2px solid var(--border2);border-top-color:var(--blue-bright);border-radius:50%;animation:ptrSpin .6s linear infinite;flex-shrink:0;}
+
+.dept-list-wrap{overflow-y:auto;flex:1;padding:8px 0;}
+.dept-list-wrap::-webkit-scrollbar{width:4px;}.dept-list-wrap::-webkit-scrollbar-thumb{background:var(--border2);}
+.dept-row{display:flex;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--border);}
+.dept-row:last-child{border-bottom:none;}
+.dept-row.zero{opacity:.4;}
+.dept-rank{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text3);width:22px;flex-shrink:0;text-align:center;}
+.dept-rank.top1{color:var(--red-bright);}
+.dept-rank.top2{color:var(--amber-bright);}
+.dept-rank.top3{color:var(--blue-bright);}
+.dept-main{flex:1;min-width:0;}
+.dept-name-row{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px;}
+.dept-name{font-size:12.5px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dept-count{font-family:var(--mono);font-size:12px;color:var(--blue-bright);font-weight:600;flex-shrink:0;}
+.dept-row.zero .dept-count{color:var(--text3);}
+.dept-track{height:5px;background:var(--border2);border-radius:3px;overflow:hidden;}
+.dept-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--blue-bright));border-radius:3px;transition:width .4s ease;}
+.dept-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 20px;gap:10px;color:var(--text3);}
+.dept-empty svg{width:28px;height:28px;stroke:var(--text3);fill:none;stroke-width:1.5;opacity:.4;}
+.dept-empty-msg{font-size:11px;letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);}
+@media(max-width:580px){
+  .dept-modal{max-width:100%;max-height:92vh;}
+  .dept-modal-title{font-size:14px;}
+  .dept-filter-btn{font-size:9.5px;padding:8px 4px;}
+}
 </style>
 </head>
 <body>
@@ -269,7 +318,7 @@ audio{display:none;}
 
 <div class="stats">
   <div class="stat"><div class="stat-lbl">Total Today</div><div class="stat-n c-blue" id="stat-total">0</div></div>
-  <div class="stat"><div class="stat-lbl">Most Calls Today</div><div class="stat-n c-red" id="stat-mostcalls">—</div></div>
+  <div class="stat clickable" id="stat-mostcalls-box" onclick="openDeptModal()"><div class="stat-lbl">Most Calls Today</div><div class="stat-n c-red" id="stat-mostcalls">—</div></div>
   <div class="stat"><div class="stat-lbl">Last Call</div><div class="stat-n c-amber" id="stat-last">—</div></div>
   <div class="stat"><div class="stat-lbl">Calls / Hr</div><div class="stat-n c-blue" id="stat-rate">0</div></div>
 </div>
@@ -319,6 +368,26 @@ audio{display:none;}
       <button class="modal-close" onclick="closeModalDirect()">✕</button>
     </div>
     <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- Department Leaderboard HUD -->
+<div class="dept-modal-overlay" id="dept-modal-overlay" onclick="closeDeptModal(event)">
+  <div class="dept-modal" id="dept-modal">
+    <div class="dept-modal-hdr">
+      <div class="dept-modal-hdr-left">
+        <div class="dept-modal-hdr-bar"></div>
+        <div><div class="dept-modal-title">Department Call Volume</div><div class="dept-modal-sub" id="dept-modal-sub">Ranked by total calls</div></div>
+      </div>
+      <button class="dept-modal-close" onclick="closeDeptModalDirect()">✕</button>
+    </div>
+    <div class="dept-filter-row" id="dept-filter-row">
+      <button class="dept-filter-btn" data-range="today" onclick="setDeptRange('today')">Today</button>
+      <button class="dept-filter-btn" data-range="24h" onclick="setDeptRange('24h')">24 Hours</button>
+      <button class="dept-filter-btn" data-range="3d" onclick="setDeptRange('3d')">3 Days</button>
+      <button class="dept-filter-btn" data-range="7d" onclick="setDeptRange('7d')">7 Days</button>
+    </div>
+    <div class="dept-list-wrap" id="dept-list-wrap"></div>
   </div>
 </div>
 
@@ -649,7 +718,8 @@ const KEYWORD_BANK = {
   "amel": "Amherst",
   "guts missile": "Getzville",
   "east sammer": "East Amherst",
-  "east danvers": "East Amherst"
+  "east danvers": "East Amherst",
+  "amherst flair": "Amherst Fire"
 };
 
 function applyKeywordBank(text) {
@@ -665,12 +735,6 @@ function applyKeywordBank(text) {
 }
 
 // ── Timestamp normalization ────────────────────────────────────────────
-// Whisper transcribes clock-time references inconsistently — "1630",
-// "16 30", "16-30", "16:30", sometimes with "timestamp" before it or
-// "hours"/"hrs" after it. This rewrites any of those forms to "HH:MM".
-// Anchored to the "timestamp"/"hours" keywords on purpose so it never
-// touches unrelated numbers (radio codes like "10-4", street numbers,
-// unit numbers, etc).
 function normalizeTimestamps(text) {
   if (!text) return text;
   let out = text;
@@ -681,8 +745,6 @@ function normalizeTimestamps(text) {
     return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
   }
 
-  // XX:XX / XX-XX / XX XX — anchored by "timestamp"/"Amherst Fire" before
-  // it, or "hours"/"hrs"/"Amherst Fire" right after it.
   out = out.replace(
     /\b((?:timestamp|Amherst Fire)\s+)?(\d{1,2})\s*[:\-\s]\s*(\d{2})\b(\s*(?:hours?|hrs?|Amherst Fire)\b)?/gi,
     (m0, ts, h, mm, hrs) => {
@@ -692,8 +754,6 @@ function normalizeTimestamps(text) {
     }
   );
 
-  // Bare 3–4 digit time, e.g. "930 hours", "timestamp 1630", or
-  // "1342 Amherst Fire"
   out = out.replace(
     /\b((?:timestamp|Amherst Fire)\s+)?(\d{3,4})\b(\s*(?:hours?|hrs?|Amherst Fire)\b)?/gi,
     (m0, ts, digits, hrs) => {
@@ -708,30 +768,19 @@ function normalizeTimestamps(text) {
   return out;
 }
 
-// The one function to call anywhere general transcript/notes text is
-// displayed — applies keyword corrections, then timestamp normalization.
 function formatText(text) {
   return normalizeTimestamps(applyKeywordBank(text));
 }
 
-// Dispatch convention: "6-6 Bruce Road" means house number 66, not a range —
-// so for LOCATIONS ONLY, collapse any "number - number" into one number by
-// dropping the dash. (Not applied to general transcript text, which can
-// contain real dashed codes like "10-4" that must stay intact.)
 function collapseNumberDashes(text) {
   if (!text) return text;
   return text.replace(/\b(\d+)\s*-\s*(\d+)\b/g, '$1$2');
 }
 
-// The one function to call anywhere a LOCATION string is displayed or
-// geocoded — applies keyword corrections, then the number-dash collapse.
 function normalizeLocationText(text) {
   return collapseNumberDashes(applyKeywordBank(text || ''));
 }
 
-// ── Address validation ──────────────────────────────────────────────────
-// Only skip the incident card if the location is unknown/empty. No format
-// check is applied — any non-empty, non-"unknown" location is accepted.
 function isValidAddress(rawLoc) {
   if (!rawLoc) return false;
   const loc = normalizeLocationText(rawLoc).trim();
@@ -740,12 +789,7 @@ function isValidAddress(rawLoc) {
   return true;
 }
 
-// ── Address dedup (1hr window) ──────────────────────────────────────────
-// If two calls at the same address land within an hour of each other, only
-// the first one gets shown as an incident card. Later ones inside that
-// window are folded in — they still show up normally in the Radio Log,
-// which pulls from a separate feed this check never touches.
-let addressLastShown = {}; // normalized location -> ms timestamp of last shown incident
+let addressLastShown = {};
 
 function getIncidentTimeMs(inc) {
   return inc.created_at ? new Date(inc.created_at).getTime() : Date.now();
@@ -761,21 +805,6 @@ function isDuplicateAddress(inc) {
   return false;
 }
 
-// ── Known Fire Departments / Stations ────────────────────────────────────
-// Add every department/station name that could respond to a call here.
-// getStationLabel() scans (in order: unit field, then transcript, then
-// notes — whichever has text) for the FIRST department on this list it
-// finds, case-insensitive, whole-word. "aliases" covers alternate spellings
-// that show up after the keyword bank runs (e.g. both "Eggertsville" and
-// "Eggertsville" appear as keyword-bank targets elsewhere in this file).
-//
-// ORDER MATTERS: a multi-word name that CONTAINS another entry on this list
-// must come first, or the shorter one will match inside it — e.g. "East
-// Amherst" has to be checked before plain "Amherst", since "\bAmherst\b"
-// would otherwise match the "Amherst" inside "East Amherst" first.
-//
-// If nothing on this list is heard anywhere in the call, the department
-// shows as "NA".
 const DEPARTMENT_LIST = [
   { label: "East Amherst FD",   aliases: ["East Amherst"] },
   { label: "Eggertsville FD",   aliases: ["Eggertsville"] },
@@ -790,7 +819,7 @@ const DEPARTMENT_LIST = [
   { label: "Snyder FD",         aliases: ["Snyder"] },
   { label: "Main Transit FD",   aliases: ["Main Transit"] },
   { label: "Ellicott Creek FD", aliases: ["Ellicott Creek"] },
-  { label: "Rapids Fire FD",    aliases: ["Rapids Fire", "Rapids"] },
+  { label: "Rapids Fire FD",    aliases: ["Rapids Fire", "Rapid", "Rapids"] },
   { label: "North Amherst FD",  aliases: ["North Amherst"] },
   { label: "North Bailey FD",   aliases: ["North Bailey", "Bailey"] },
 ];
@@ -808,8 +837,6 @@ function findDepartmentInText(rawText) {
   return null;
 }
 
-// Transcript/notes/units-derived department (what getStationLabel used to
-// return on its own, before tone-detect existed).
 function getTranscriptDept(inc) {
   for (const u of (inc.units || [])) {
     const found = findDepartmentInText(u);
@@ -818,20 +845,10 @@ function getTranscriptDept(inc) {
   return findDepartmentInText(inc.transcript) || findDepartmentInText(inc.notes) || null;
 }
 
-// Two-tone-derived department — inc.tone_dept is the raw station name the
-// Python two-tone decoder matched (e.g. "East Amherst"), run through the
-// same alias list so it normalizes to "East Amherst FD" just like the
-// transcript path does.
 function getToneDept(inc) {
   return inc.tone_dept ? findDepartmentInText(inc.tone_dept) : null;
 }
 
-// Reconciliation:
-//  - tone only            -> tone dept
-//  - transcript only       -> transcript dept
-//  - both, and they agree  -> that dept
-//  - both, but disagree    -> NA
-//  - neither                -> NA
 function getStationLabel(inc) {
   const toneDept = getToneDept(inc);
   const transcriptDept = getTranscriptDept(inc);
@@ -841,24 +858,17 @@ function getStationLabel(inc) {
   return toneDept || transcriptDept || 'NA';
 }
 
-// The radio log is unstructured — we still split each stored transcript
-// blob into readable lines client-side, same trick as the incident view,
-// but these lines are NOT tied to any incident card.
-// Detects a phrase that's immediately repeated back-to-back (e.g. dispatch
-// echoing back what a unit just said, with no punctuation between the two
-// copies — "Newstead 8 on location Newstead 8 on location") and inserts a
-// split marker between the two copies so they render as separate lines.
 function splitRepeatedPhrases(text) {
   const words = text.split(/\s+/).filter(Boolean);
   const n = words.length;
-  if (n < 4) return text; // too short to contain a meaningful repeat
+  if (n < 4) return text;
 
   const norm = w => w.toLowerCase().replace(/[^\w]/g, '');
   const breakpoints = new Set();
 
   for (let i = 0; i < n; i++) {
-    const maxLen = Math.min(8, Math.floor((n - i) / 2)); // cap phrase length at 8 words
-    for (let L = maxLen; L >= 2; L--) { // try longest match first
+    const maxLen = Math.min(8, Math.floor((n - i) / 2));
+    for (let L = maxLen; L >= 2; L--) {
       let match = true;
       for (let k = 0; k < L; k++) {
         const a = norm(words[i + k]);
@@ -866,8 +876,8 @@ function splitRepeatedPhrases(text) {
         if (!a || a !== b) { match = false; break; }
       }
       if (match) {
-        breakpoints.add(i + L); // split right before the second copy starts
-        i += (2 * L - 1);       // skip past the whole repeated pair
+        breakpoints.add(i + L);
+        i += (2 * L - 1);
         break;
       }
     }
@@ -1055,7 +1065,6 @@ function renderRow(inc) {
   </div>`;
 }
 
-// Radio log rows are flat, timestamped lines — not grouped by incident.
 function renderLogEntry(entry) {
   const lines = splitTranscript(formatText(entry.text || ''));
   return lines.slice().reverse().map(l => `<div class="tx-line-row">
@@ -1242,8 +1251,147 @@ function closeModalDirect() {
   document.getElementById('modal-overlay').classList.remove('open');
 }
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModalDirect(); }
+  if (e.key === 'Escape') { closeModalDirect(); closeDeptModalDirect(); }
 });
+
+// ── Department Leaderboard HUD ──────────────────────────────────────────
+// NOTE: allIncidents only holds whatever pages have been paginated in so
+// far (fetchIncidents loads 50 at a time, normally triggered by scrolling
+// the Active Calls feed). If someone opens this HUD and picks "7 Days"
+// before 7 days of incidents have actually been paged into memory, the
+// tally would silently just reflect however much *happened* to be loaded
+// — which is why 3-day and 7-day counts could look identical (nothing
+// past 3 days was loaded yet). ensureDeptDataLoaded() below fixes that by
+// pulling additional pages on demand until enough history is in memory
+// to cover the selected window, or until the backend has nothing older
+// left to give (allLoaded).
+let deptCurrentRange = 'today';
+let deptLoading = false;
+let deptLoadToken = 0; // guards against a stale fetch loop finishing after a newer range was selected
+
+// 'today' has no fixed window (a calendar day can be anywhere from ~19-24hrs
+// of actual elapsed time depending on where "midnight ET" falls), so we use
+// a generous 30hr margin purely to decide how much history to page in —
+// the actual filtering below still uses the exact isToday() calendar check.
+const DEPT_RANGE_MS = {
+  'today': 30 * 60 * 60 * 1000,
+  '24h':   24 * 60 * 60 * 1000,
+  '3d':    3 * 24 * 60 * 60 * 1000,
+  '7d':    7 * 24 * 60 * 60 * 1000,
+};
+const DEPT_RANGE_LABEL = { 'today': 'Today', '24h': 'Last 24 Hours', '3d': 'Last 3 Days', '7d': 'Last 7 Days' };
+
+// Oldest incident currently sitting in memory (allIncidents is newest-first,
+// pages appended in order, so the oldest loaded item is the last element).
+function oldestLoadedTimeMs() {
+  if (allIncidents.length === 0) return Date.now();
+  return getIncidentTimeMs(allIncidents[allIncidents.length - 1]);
+}
+
+// Keeps calling fetchIncidents() to pull in more pages until either:
+//  - we've loaded far enough back to cover the requested window, or
+//  - allLoaded is true (backend has no more history left), or
+//  - a newer range selection superseded this one (via deptLoadToken)
+async function ensureDeptDataLoaded(range, token) {
+  const cutoff = Date.now() - (DEPT_RANGE_MS[range] || DEPT_RANGE_MS['today']);
+  while (!allLoaded && oldestLoadedTimeMs() > cutoff) {
+    if (token !== deptLoadToken) return; // a different range was picked meanwhile — abandon this loop
+    await fetchIncidents(currentOffset);
+  }
+}
+
+function computeDeptTally(range) {
+  // Start every known department at 0 so the list always shows the full
+  // roster — departments with actual calls get sorted to the top by count,
+  // the untouched ones just fall in behind them at 0.
+  const tally = {};
+  DEPARTMENT_LIST.forEach(d => { tally[d.label] = 0; });
+
+  if (range === 'today') {
+    allIncidents.forEach(inc => {
+      if (!isToday(inc)) return;
+      const dept = getStationLabel(inc);
+      if (dept === 'NA') return;
+      tally[dept] = (tally[dept] || 0) + 1;
+    });
+  } else {
+    const cutoff = Date.now() - (DEPT_RANGE_MS[range] || DEPT_RANGE_MS['24h']);
+    allIncidents.forEach(inc => {
+      if (getIncidentTimeMs(inc) < cutoff) return;
+      const dept = getStationLabel(inc);
+      if (dept === 'NA') return;
+      tally[dept] = (tally[dept] || 0) + 1;
+    });
+  }
+  return Object.entries(tally).sort((a, b) => b[1] - a[1]);
+}
+
+function renderDeptLoading() {
+  document.getElementById('dept-list-wrap').innerHTML =
+    `<div class="dept-loading-row"><div class="dept-loading-spin"></div>Loading call history…</div>`;
+}
+
+function renderDeptList(range) {
+  const entries = computeDeptTally(range);
+  const wrap = document.getElementById('dept-list-wrap');
+  const sub  = document.getElementById('dept-modal-sub');
+  sub.textContent = `Ranked by total calls · ${DEPT_RANGE_LABEL[range] || ''}`;
+
+  // computeDeptTally always seeds every known department at 0, so this list
+  // is never actually empty — departments with 0 calls just sink to the
+  // bottom, dimmed, behind whichever ones had activity in this window.
+  const max = entries[0][1] || 1;
+  wrap.innerHTML = entries.map(([name, count], idx) => {
+    const rank = idx + 1;
+    const isZero = count === 0;
+    const rankClass = isZero ? '' : (rank === 1 ? 'top1' : rank === 2 ? 'top2' : rank === 3 ? 'top3' : '');
+    return `<div class="dept-row ${isZero ? 'zero' : ''}">
+      <div class="dept-rank ${rankClass}">${rank}</div>
+      <div class="dept-main">
+        <div class="dept-name-row">
+          <div class="dept-name">${escHtml(name)}</div>
+          <div class="dept-count">${count}</div>
+        </div>
+        <div class="dept-track"><div class="dept-fill" style="width:${isZero ? 0 : (count/max*100)}%"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function setDeptRange(range) {
+  deptCurrentRange = range;
+  document.querySelectorAll('#dept-filter-row .dept-filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-range') === range);
+  });
+
+  const token = ++deptLoadToken;
+  deptLoading = true;
+  document.querySelectorAll('#dept-filter-row .dept-filter-btn').forEach(b => b.disabled = true);
+
+  // Show whatever we already have immediately, then top it up if needed —
+  // avoids a blank loading flash when the data was already sufficient.
+  renderDeptList(range);
+  if (!allLoaded && oldestLoadedTimeMs() > Date.now() - (DEPT_RANGE_MS[range] || DEPT_RANGE_MS['today'])) {
+    renderDeptLoading();
+    await ensureDeptDataLoaded(range, token);
+  }
+
+  if (token === deptLoadToken) {
+    renderDeptList(range);
+    deptLoading = false;
+    document.querySelectorAll('#dept-filter-row .dept-filter-btn').forEach(b => b.disabled = false);
+  }
+}
+
+function openDeptModal() {
+  setDeptRange(deptCurrentRange || 'today');
+  document.getElementById('dept-modal-overlay').classList.add('open');
+}
+
+function closeDeptModal(e) { if (e.target === document.getElementById('dept-modal-overlay')) closeDeptModalDirect(); }
+function closeDeptModalDirect() {
+  document.getElementById('dept-modal-overlay').classList.remove('open');
+}
 
 // ── SSE live feed — carries both incident cards and flat log lines ────────
 const sseStream = new EventSource(STREAM_API);
