@@ -988,8 +988,9 @@ def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None, ton
 # decoder: short-window FFT, judge each slice by how "spiky" its peak is
 # vs. that same slice's own median magnitude (a real tone is a narrow
 # spike regardless of loudness), group consecutive spiky slices into
-# segments, take the first two qualifying segments as tone1/tone2, and
-# match them against the known station tone-pair table below. ────────────
+# segments, prefer the first two qualifying segments as tone1/tone2 (fall
+# back to the last two if that pair doesn't match anything), and match
+# them against the known station tone-pair table below. ──────────────────
 FIRE_TONE_STATIONS = [
     {"name": "East Amherst",     "f1": 2689, "f2": 674},
     {"name": "Eggertsville",     "f1": 387,  "f2": 475},
@@ -1007,7 +1008,7 @@ FIRE_TONE_STATIONS = [
     {"name": "Rapids Fire",      "f1": 2689, "f2": 949},
     {"name": "North Bailey",     "f1": 2690, "f2": 732},
 ]
-TONE_FREQ_MIN, TONE_FREQ_MAX = 200, 3200
+TONE_FREQ_MIN, TONE_FREQ_MAX = 250, 3200
 TONE_SHARPNESS_THRESH = 7.0
 TONE_MIN_DURATION_SEC = 0.45
 TONE_MATCH_TOLERANCE  = 0.03
@@ -1045,12 +1046,23 @@ def _tone_track(pcm, sr):
 
     track = []
     for start in range(0, len(pcm) - n_time, hop):
-        spec = np.abs(np.fft.rfft(pcm[start:start + n_time] * window, n=n_fft))[lo:hi]
-        if spec.size == 0:
+        full_spec = np.abs(np.fft.rfft(pcm[start:start + n_time] * window, n=n_fft))
+        if full_spec.size <= 1:
             continue
-        peak_idx = int(np.argmax(spec))
-        median = np.median(spec) or 1e-9
-        track.append({"t": start / sr, "freq": freqs[lo + peak_idx], "peakiness": spec[peak_idx] / median})
+        # Find the TRUE peak across the whole spectrum first (not just the
+        # 250Hz-3.2kHz band). Restricting the search to the band would just
+        # clamp an out-of-band peak to the nearest in-band bin edge instead
+        # of excluding it, which is what would let sub-250Hz tones sneak
+        # back in pinned to the band floor. Only a peak that's genuinely
+        # inside the band counts.
+        peak_idx_global = int(np.argmax(full_spec[1:])) + 1  # skip DC bin
+        band = full_spec[lo:hi]
+        if band.size == 0:
+            continue
+        median = np.median(band) or 1e-9
+        in_band = lo <= peak_idx_global < hi
+        peakiness = (full_spec[peak_idx_global] / median) if in_band else 0.0
+        track.append({"t": start / sr, "freq": freqs[peak_idx_global], "peakiness": peakiness})
     return track
 
 
@@ -1081,9 +1093,11 @@ def _group_tone_segments(track):
 
 
 def detect_two_tone_department(audio_bytes: bytes) -> str | None:
-    """Returns the matched station NAME if the clip's first two qualifying
-    tone segments match a known department's tone pair within tolerance,
-    else None."""
+    """Returns the matched station NAME if a tone-segment pair from the
+    clip matches a known department's tone pair within tolerance, else
+    None. Prefers the first two qualifying tone segments; if that pair
+    doesn't match any station, falls back to the last two segments before
+    giving up."""
     try:
         sr = 8000
         pcm = _tone_decode_pcm(audio_bytes, sr)
@@ -1092,15 +1106,21 @@ def detect_two_tone_department(audio_bytes: bytes) -> str | None:
         segs = _group_tone_segments(_tone_track(pcm, sr))
         if len(segs) < 2:
             return None
-        # Use the LAST two qualifying segments in the clip (not the first
-        # two) — segs is time-ordered, so segs[-2] is the second-to-last
-        # tone (treated as tone1) and segs[-1] is the last tone (tone2).
-        tone1, tone2 = segs[-2]["freq"], segs[-1]["freq"]
-        for st in FIRE_TONE_STATIONS:
-            if (abs(tone1 - st["f1"]) / st["f1"] <= TONE_MATCH_TOLERANCE and
-                abs(tone2 - st["f2"]) / st["f2"] <= TONE_MATCH_TOLERANCE):
-                return st["name"]
-        return None
+
+        def match_pair(f1, f2):
+            for st in FIRE_TONE_STATIONS:
+                if (abs(f1 - st["f1"]) / st["f1"] <= TONE_MATCH_TOLERANCE and
+                    abs(f2 - st["f2"]) / st["f2"] <= TONE_MATCH_TOLERANCE):
+                    return st["name"]
+            return None
+
+        # Prefer the first two qualifying segments in the clip.
+        matched = match_pair(segs[0]["freq"], segs[1]["freq"])
+        if matched:
+            return matched
+
+        # No detection off the first pair — fall back to the last two.
+        return match_pair(segs[-2]["freq"], segs[-1]["freq"])
     except Exception as e:
         print(f"[tone] detection error: {e}", flush=True)
         return None
