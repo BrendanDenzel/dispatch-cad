@@ -808,14 +808,37 @@ function findDepartmentInText(rawText) {
   return null;
 }
 
-function getStationLabel(inc) {
-  // 1. Units field first — short and usually the clearest signal.
+// Transcript/notes/units-derived department (what getStationLabel used to
+// return on its own, before tone-detect existed).
+function getTranscriptDept(inc) {
   for (const u of (inc.units || [])) {
     const found = findDepartmentInText(u);
     if (found) return found;
   }
-  // 2. Fall back to scanning the full transcript, then the notes.
-  return findDepartmentInText(inc.transcript) || findDepartmentInText(inc.notes) || 'NA';
+  return findDepartmentInText(inc.transcript) || findDepartmentInText(inc.notes) || null;
+}
+
+// Two-tone-derived department — inc.tone_dept is the raw station name the
+// Python two-tone decoder matched (e.g. "East Amherst"), run through the
+// same alias list so it normalizes to "East Amherst FD" just like the
+// transcript path does.
+function getToneDept(inc) {
+  return inc.tone_dept ? findDepartmentInText(inc.tone_dept) : null;
+}
+
+// Reconciliation:
+//  - tone only            -> tone dept
+//  - transcript only       -> transcript dept
+//  - both, and they agree  -> that dept
+//  - both, but disagree    -> NA
+//  - neither                -> NA
+function getStationLabel(inc) {
+  const toneDept = getToneDept(inc);
+  const transcriptDept = getTranscriptDept(inc);
+  if (toneDept && transcriptDept) {
+    return toneDept === transcriptDept ? toneDept : 'NA';
+  }
+  return toneDept || transcriptDept || 'NA';
 }
 
 // The radio log is unstructured — we still split each stored transcript
