@@ -877,10 +877,6 @@ function findDepartmentInText(rawText) {
 }
 
 function getTranscriptDept(inc) {
-  for (const u of (inc.units || [])) {
-    const found = findDepartmentInText(u);
-    if (found) return found;
-  }
   return findDepartmentInText(inc.transcript) || findDepartmentInText(inc.notes) || null;
 }
 
