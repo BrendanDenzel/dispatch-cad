@@ -862,7 +862,6 @@ Otherwise, respond ONLY with a valid JSON object with these exact fields:
   - Do NOT concatenate multiple streets or addresses with "and"/"," even if several are mentioned in the same transmission — e.g. if the transcript says "1551 Charles Gate Circle, Old Oak Post Road and Greenwood Drive", return only "1551 Charles Gate Circle" (the actual numbered address, not the unnumbered streets near it).
   - If a numbered address is present anywhere in the transcript, always prefer it over any bare street name or intersection.
   - Only return a bare street name or intersection (no house number) if NO numbered address is mentioned anywhere in the transcript.
-- units: array of strings (unit numbers or call signs mentioned, empty array if none)
 - priority: string, one of exactly: "FIRE", "EMS", "UNKNOWN" — classify the call itself: use "FIRE" for alarm activations, structure fires, vehicle fires, brush fires, hazmat, or any other fire-related call; use "EMS" for medical calls, injuries, difficulty breathing, rescues, or anything involving a person's health/condition; use "UNKNOWN" for anything that doesn't clearly fall into either of those
 - notes: string (any other relevant detail, max 1 sentence)
 
@@ -991,7 +990,6 @@ def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None, ton
         row = {
             "incident_type": parsed.get("incident_type", "Unknown"),
             "location":      parsed.get("location", "Unknown"),
-            "units":         parsed.get("units", []),
             "priority":      parsed.get("priority", "Unknown"),
             "notes":         parsed.get("notes", ""),
             "transcript":    transcript,
