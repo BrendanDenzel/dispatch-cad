@@ -673,12 +673,11 @@ def get_fire_stats():
                  .execute()).count or 0
 
         rows = (db.table(FIRE_INCIDENT_TABLE)
-                .select("units, time_str, created_at, incident_type")
+                .select("time_str, created_at, incident_type")
                 .gte("created_at", today_start_utc)
                 .order("created_at", desc=True)
                 .execute()).data or []
 
-        all_units = {u for r in rows for u in (r.get("units") or [])}
         last_call = rows[0]["time_str"] if rows else "—"
 
         rate = "0"
@@ -696,7 +695,6 @@ def get_fire_stats():
         return jsonify({
             "total": total,
             "all_time": all_time,
-            "units": len(all_units),
             "last_call": last_call,
             "rate": rate,
             "breakdown": types
