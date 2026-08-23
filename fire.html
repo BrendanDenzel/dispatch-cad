@@ -283,6 +283,22 @@ audio{display:none;}
   .dept-modal-title{font-size:14px;}
   .dept-filter-btn{font-size:9.5px;padding:8px 4px;}
 }
+
+/* ── Last-Call → Department Full-History Stats HUD ─────────────────── */
+.ls-dept-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 18px 14px;}
+.ls-dept-btn{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.2px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);padding:11px 6px;border-radius:3px;cursor:pointer;transition:all .15s;text-align:center;line-height:1.35;}
+.ls-dept-btn:hover{border-color:var(--amber);color:var(--amber-bright);}
+.ls-back-row{padding:10px 18px 0;}
+.ls-back-btn{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.5px;background:transparent;border:1px solid var(--border2);color:var(--text2);padding:5px 11px;border-radius:3px;cursor:pointer;transition:all .15s;}
+.ls-back-btn:hover{border-color:var(--amber);color:var(--amber-bright);}
+.ls-section{border-top:1px solid var(--border);padding:12px 18px 6px;margin-top:6px;}
+.ls-section:first-of-type{margin-top:14px;}
+.ls-section-title{font-size:10px;font-weight:600;color:var(--text3);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:2px;}
+.ls-section .dept-row{padding:9px 0;}
+.ls-section .dept-row:last-child{border-bottom:none;}
+@media(max-width:580px){
+  .ls-dept-grid{grid-template-columns:repeat(2,1fr);}
+}
 </style>
 </head>
 <body>
@@ -319,7 +335,7 @@ audio{display:none;}
 <div class="stats">
   <div class="stat"><div class="stat-lbl">Total Today</div><div class="stat-n c-blue" id="stat-total">0</div></div>
   <div class="stat clickable" id="stat-mostcalls-box" onclick="openDeptModal()"><div class="stat-lbl">Most Today</div><div class="stat-n c-red" id="stat-mostcalls">—</div></div>
-  <div class="stat"><div class="stat-lbl">Last Call</div><div class="stat-n c-amber" id="stat-last">—</div></div>
+  <div class="stat clickable" id="stat-last-box" onclick="openLastCallModal()"><div class="stat-lbl">Last Call</div><div class="stat-n c-amber" id="stat-last">—</div></div>
   <div class="stat"><div class="stat-lbl">Calls / Hr</div><div class="stat-n c-blue" id="stat-rate">0</div></div>
 </div>
 
@@ -388,6 +404,20 @@ audio{display:none;}
       <button class="dept-filter-btn" data-range="7d" onclick="setDeptRange('7d')">7 Days</button>
     </div>
     <div class="dept-list-wrap" id="dept-list-wrap"></div>
+  </div>
+</div>
+
+<!-- Last Call → Department Full-History Stats HUD -->
+<div class="dept-modal-overlay" id="deptstats-modal-overlay" onclick="closeDeptStatsModal(event)">
+  <div class="dept-modal" id="deptstats-modal">
+    <div class="dept-modal-hdr">
+      <div class="dept-modal-hdr-left">
+        <div class="dept-modal-hdr-bar"></div>
+        <div><div class="dept-modal-title" id="deptstats-title">Department Stats</div><div class="dept-modal-sub" id="deptstats-sub">Select a department</div></div>
+      </div>
+      <button class="dept-modal-close" onclick="closeDeptStatsModalDirect()">✕</button>
+    </div>
+    <div class="dept-list-wrap" id="deptstats-body"></div>
   </div>
 </div>
 
@@ -1260,7 +1290,7 @@ function closeModalDirect() {
   document.getElementById('modal-overlay').classList.remove('open');
 }
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModalDirect(); closeDeptModalDirect(); }
+  if (e.key === 'Escape') { closeModalDirect(); closeDeptModalDirect(); closeDeptStatsModalDirect(); }
 });
 
 // ── Department Leaderboard HUD ──────────────────────────────────────────
@@ -1400,6 +1430,148 @@ function openDeptModal() {
 function closeDeptModal(e) { if (e.target === document.getElementById('dept-modal-overlay')) closeDeptModalDirect(); }
 function closeDeptModalDirect() {
   document.getElementById('dept-modal-overlay').classList.remove('open');
+}
+
+// ── Last Call → Department Full-History Stats HUD ───────────────────────
+// Unlike the "Most Today" HUD (which only needs to page in enough history
+// to cover a bounded window), this view wants the department's FULL call
+// history, so selecting a department pages in incidents until allLoaded
+// is true (or a newer selection supersedes this one via lsLoadToken).
+let lsCurrentDept = null;
+let lsLoadToken = 0;
+
+function openLastCallModal() {
+  lsCurrentDept = null;
+  ++lsLoadToken; // invalidate any in-flight load loop from a previous open
+  renderLsPicker();
+  document.getElementById('deptstats-modal-overlay').classList.add('open');
+}
+
+function closeDeptStatsModal(e) { if (e.target === document.getElementById('deptstats-modal-overlay')) closeDeptStatsModalDirect(); }
+function closeDeptStatsModalDirect() {
+  document.getElementById('deptstats-modal-overlay').classList.remove('open');
+}
+
+function renderLsPicker() {
+  document.getElementById('deptstats-title').textContent = 'Department Stats';
+  document.getElementById('deptstats-sub').textContent = 'Select a department for full call history';
+  document.getElementById('deptstats-body').innerHTML = `
+    <div class="ls-dept-grid">
+      ${DEPARTMENT_LIST.map(d => `<button class="ls-dept-btn" onclick="selectLsDept('${d.label.replace(/'/g,"\\'")}')">${escHtml(d.label)}</button>`).join('')}
+    </div>`;
+}
+
+async function selectLsDept(label) {
+  lsCurrentDept = label;
+  const token = ++lsLoadToken;
+
+  document.getElementById('deptstats-title').textContent = label;
+  document.getElementById('deptstats-sub').textContent = 'Loading full call history…';
+  document.getElementById('deptstats-body').innerHTML = `
+    <div class="ls-back-row"><button class="ls-back-btn" onclick="renderLsPicker()">‹ Back to departments</button></div>
+    <div class="dept-loading-row"><div class="dept-loading-spin"></div>Loading call history…</div>`;
+
+  // Page in incidents until the backend has nothing older left to give.
+  while (!allLoaded) {
+    if (token !== lsLoadToken) return; // a different department was picked meanwhile
+    await fetchIncidents(currentOffset);
+  }
+  if (token !== lsLoadToken) return;
+
+  renderLsResults(label);
+}
+
+function fourHourBucketLabel(hour) {
+  const idx = Math.floor(hour / 4);
+  const start = idx * 4;
+  const end = start + 4;
+  const fmt = h => {
+    const hh = h % 24;
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    let h12 = hh % 12; if (h12 === 0) h12 = 12;
+    return `${h12}${ampm}`;
+  };
+  return `${fmt(start)}\u2013${fmt(end)}`;
+}
+
+function lsRenderRankedList(entries, max) {
+  return entries.map(([name, count], idx) => {
+    const rank = idx + 1;
+    const rankClass = rank === 1 ? 'top1' : rank === 2 ? 'top2' : rank === 3 ? 'top3' : '';
+    return `<div class="dept-row">
+      <div class="dept-rank ${rankClass}">${rank}</div>
+      <div class="dept-main">
+        <div class="dept-name-row">
+          <div class="dept-name">${escHtml(name)}</div>
+          <div class="dept-count">${count}</div>
+        </div>
+        <div class="dept-track"><div class="dept-fill" style="width:${count/max*100}%"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderLsResults(label) {
+  const calls = allIncidents.filter(inc => getStationLabel(inc) === label);
+
+  document.getElementById('deptstats-title').textContent = label;
+  document.getElementById('deptstats-sub').textContent = `${calls.length} call${calls.length === 1 ? '' : 's'} on record`;
+
+  const backRow = `<div class="ls-back-row"><button class="ls-back-btn" onclick="renderLsPicker()">‹ Back to departments</button></div>`;
+
+  if (calls.length === 0) {
+    document.getElementById('deptstats-body').innerHTML = `
+      ${backRow}
+      <div class="dept-empty">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div class="dept-empty-msg">No calls on record</div>
+      </div>`;
+    return;
+  }
+
+  const dayTally = {};
+  const bucketTally = {};
+  const typeTally = {};
+
+  calls.forEach(inc => {
+    const t = getIncidentTimeMs(inc);
+    const d = new Date(t);
+
+    const dayName = d.toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'long' });
+    dayTally[dayName] = (dayTally[dayName] || 0) + 1;
+
+    const hourStr = d.toLocaleString('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false });
+    const hour = parseInt(hourStr, 10) % 24;
+    const bucket = fourHourBucketLabel(hour);
+    bucketTally[bucket] = (bucketTally[bucket] || 0) + 1;
+
+    const type = inc.incident_type || 'Unknown';
+    typeTally[type] = (typeTally[type] || 0) + 1;
+  });
+
+  const top3 = obj => Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+  const dayTop = top3(dayTally);
+  const bucketTop = top3(bucketTally);
+  const typeTop = top3(typeTally);
+  const dayMax = dayTop[0]?.[1] || 1;
+  const bucketMax = bucketTop[0]?.[1] || 1;
+  const typeMax = typeTop[0]?.[1] || 1;
+
+  document.getElementById('deptstats-body').innerHTML = `
+    ${backRow}
+    <div class="ls-section">
+      <div class="ls-section-title">Busiest Days of the Week</div>
+      ${lsRenderRankedList(dayTop, dayMax)}
+    </div>
+    <div class="ls-section">
+      <div class="ls-section-title">Busiest Time Ranges</div>
+      ${lsRenderRankedList(bucketTop, bucketMax)}
+    </div>
+    <div class="ls-section">
+      <div class="ls-section-title">Most Likely Call Type</div>
+      ${lsRenderRankedList(typeTop, typeMax)}
+    </div>`;
 }
 
 // ── SSE live feed — carries both incident cards and flat log lines ────────
