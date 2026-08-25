@@ -474,6 +474,7 @@ const KEYWORD_BANK = {
   "tigers": "Eggertsville",
   "sam hushfire": "Amherst Fire",
   "eggers": "Eggertsville",
+  "eggersville": "Eggertsville",
   "letter": "Ladder",
   "and press to fire": "Amherst Fire",
   "MS": "EMS",
@@ -853,7 +854,7 @@ const DEPARTMENT_LIST = [
   { label: "Ellicott Creek FD", aliases: ["Ellicott Creek"] },
   { label: "Rapids Fire FD", aliases: ["Rapids Fire", "Rapid Fire", "Rapid", "Rapids"], excludeAfter: ["Road", "Rd"] },
   { label: "North Amherst FD",  aliases: ["North Amherst"] },
-  { label: "North Bailey FD",   aliases: ["North Bailey", "Bailey"] },
+  { label: "North Bailey FD",   aliases: ["North Bailey", "Bailey"], excludeAfter: ["Avenue", "Ave","quality"] },
 ];
 
 function findDepartmentInText(rawText) {
