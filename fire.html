@@ -123,6 +123,12 @@ audio{display:none;}
 .svc-toggle a.active.police{background:var(--svc-police);color:#fff;}
 .svc-toggle a.active.fire{background:var(--svc-fire);color:#fff;}
 
+.goto-log-btn{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;background:var(--panel2);border:1px solid var(--border2);color:var(--blue-bright);padding:7px 12px;border-radius:3px;cursor:pointer;transition:all .15s;}
+.goto-log-btn:hover{border-color:var(--blue-bright);background:var(--blue-dim);}
+.goto-log-btn svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;flex-shrink:0;}
+.tx-line-row.tx-line-highlight{background:rgba(231,76,60,.16);animation:txPulse 1.8s ease-out;}
+@keyframes txPulse{0%{background:rgba(231,76,60,.32);}100%{background:rgba(231,76,60,.05);}}
+
 /* Mobile skinny row — sits directly under the Incidents/Radio tab bar */
 .svc-toggle-mobile{display:none;border-top:1px solid var(--border);flex-shrink:0;}
 .svc-toggle-mobile-inner{display:flex;}
@@ -1114,7 +1120,8 @@ function renderRow(inc) {
 
 function renderLogEntry(entry) {
   const lines = splitTranscript(formatText(entry.text || ''));
-  return lines.slice().reverse().map(l => `<div class="tx-line-row">
+  const tMs = entry.created_at ? new Date(entry.created_at).getTime() : '';
+  return lines.slice().reverse().map(l => `<div class="tx-line-row" data-time-ms="${tMs}">
       <span class="tx-line-time">${escHtml(entry.time_str||'')}</span>
       <span class="tx-line-text">${escHtml(l)}</span>
     </div>`).join('');
@@ -1279,6 +1286,10 @@ function openModal(id) {
     <div class="m-section">
       <div class="m-section-title">Dispatch Transcript</div>
       <div class="m-tx-box">${splitTranscript(formatText(inc.transcript||'No transcript available.')).map(l=>`<span class="m-tx-line">${escHtml(l)}</span>`).join('')}</div>
+      <button class="goto-log-btn" onclick="goToRadioLog(${inc.id})">
+        <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+        Go to radio log
+      </button>
     </div>
     <div class="m-section">
       <div class="m-section-title">Classification</div>
@@ -1290,6 +1301,40 @@ function openModal(id) {
     </div>`;
 
   document.getElementById('modal-overlay').classList.add('open');
+}
+
+function goToRadioLog(id) {
+  const inc = incidentMap[id];
+  if (!inc) return;
+  closeModalDirect();
+
+  if (window.innerWidth <= 580) {
+    mobTab('side');
+    setTimeout(() => scrollToLogEntry(inc), 320);
+  } else {
+    scrollToLogEntry(inc);
+  }
+}
+
+function scrollToLogEntry(inc) {
+  const tfeed = document.getElementById('transcript-feed');
+  if (!tfeed) return;
+  const rows = Array.from(tfeed.querySelectorAll('.tx-line-row'));
+  if (rows.length === 0) return;
+
+  const targetMs = getIncidentTimeMs(inc);
+  let closest = rows[0], closestDiff = Infinity;
+  rows.forEach(row => {
+    const t = parseInt(row.dataset.timeMs, 10);
+    if (!isNaN(t)) {
+      const diff = Math.abs(t - targetMs);
+      if (diff < closestDiff) { closestDiff = diff; closest = row; }
+    }
+  });
+
+  closest.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  closest.classList.add('tx-line-highlight');
+  setTimeout(() => closest.classList.remove('tx-line-highlight'), 1800);
 }
 
 function closeModal(e) { if (e.target === document.getElementById('modal-overlay')) closeModalDirect(); }
