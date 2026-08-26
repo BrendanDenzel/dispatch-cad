@@ -849,7 +849,7 @@ const DEPARTMENT_LIST = [
   { label: "Harris Hill FD",    aliases: ["Harris Hill"] },
   { label: "Newstead FD",       aliases: ["Newstead"] },
   { label: "Clarence Center FD", aliases: ["Clarence Center"] },
-  { label: "Clarence FD",       aliases: ["Clarence"] },
+  { label: "Clarence FD",       aliases: ["Clarence"], excludeAfter: ["Center"] },
   { label: "Akron FD",          aliases: ["Akron"] },
   { label: "Snyder FD",         aliases: ["Snyder"] },
   { label: "Main Transit FD",   aliases: ["Main Transit"] },
@@ -862,6 +862,10 @@ const DEPARTMENT_LIST = [
 function findDepartmentInText(rawText) {
   if (!rawText) return null;
   const text = applyKeywordBank(String(rawText));
+
+  let earliestIndex = Infinity;
+  let earliestLabel = null;
+
   for (const dept of DEPARTMENT_LIST) {
     for (const alias of dept.aliases) {
       const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -873,10 +877,15 @@ function findDepartmentInText(rawText) {
         pattern += `(?!\\s+(?:${excl})\\b)`;
       }
       const re = new RegExp(pattern, 'i');
-      if (re.test(text)) return dept.label;
+      const m = re.exec(text);
+      if (m && m.index < earliestIndex) {
+        earliestIndex = m.index;
+        earliestLabel = dept.label;
+      }
     }
   }
-  return null;
+
+  return earliestLabel;
 }
 
 function getTranscriptDept(inc) {
