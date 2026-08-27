@@ -233,7 +233,7 @@ def convert_to_mp3(ts_bytes: bytes) -> bytes | None:
         out_path,
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=90)
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
     finally:
         os.unlink(in_path)
 
