@@ -1027,6 +1027,7 @@ FIRE_TONE_STATIONS = [
     {"name": "Ellicott Creek",   "f1": 2689, "f2": 1130},
     {"name": "Rapids Fire",      "f1": 2689, "f2": 949},
     {"name": "North Bailey",     "f1": 2690, "f2": 732},
+    {"name": "North Amherst",    "f1": 2689, "f2": 1465},
 ]
 TONE_FREQ_MIN, TONE_FREQ_MAX = 250, 3200
 TONE_SHARPNESS_THRESH = 7.0
