@@ -233,7 +233,7 @@ def convert_to_mp3(ts_bytes: bytes) -> bytes | None:
         out_path,
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, timeout=60)
+        result = subprocess.run(cmd, capture_output=True, timeout=90)
     finally:
         os.unlink(in_path)
 
@@ -548,7 +548,7 @@ def fire_segment_mean_volume_db(seg_bytes: bytes) -> float:
     try:
         result = subprocess.run(
             ["ffmpeg", "-i", path, "-af", "volumedetect", "-f", "null", "-"],
-            capture_output=True, text=True, timeout=15
+            capture_output=True, text=True, timeout=30
         )
         for line in result.stderr.splitlines():
             if "mean_volume:" in line:
