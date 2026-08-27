@@ -1022,7 +1022,7 @@ FIRE_TONE_STATIONS = [
     {"name": "Clarence Center",  "f1": 2689, "f2": 797},
     {"name": "Clarence",         "f1": 2689, "f2": 873},
     {"name": "Akron",            "f1": 2689, "f2": 1231},
-    {"name": "Snyder",           "f1": 561,  "f2": 580},
+    {"name": "Snyder",           "f1": 461,  "f2": 580},
     {"name": "Main Transit",     "f1": 1084, "f2": 475},
     {"name": "Ellicott Creek",   "f1": 2689, "f2": 1130},
     {"name": "Rapids Fire",      "f1": 2689, "f2": 949},
