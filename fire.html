@@ -106,6 +106,7 @@ audio{display:none;}
 .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:10px;}
 .empty svg{width:32px;height:32px;stroke:var(--text3);fill:none;stroke-width:1.5;opacity:.4;}
 .empty-msg{font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;font-family:var(--mono);}
+.empty-sub{font-size:12px;color:var(--text3);opacity:.6;font-family:var(--mono);letter-spacing:.5px;}
 .toast{position:fixed;bottom:16px;right:16px;z-index:9000;background:var(--panel2);border:1px solid var(--border2);border-left:3px solid var(--blue);border-radius:3px;padding:10px 14px;min-width:220px;max-width:280px;animation:toastIn .25s ease-out;}
 .toast.fire{border-left-color:var(--red-bright);}.toast.ems{border-left-color:var(--amber-bright);}
 @keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
@@ -127,6 +128,9 @@ audio{display:none;}
 .goto-log-btn:hover{border-color:var(--blue-bright);background:var(--blue-dim);}
 .goto-log-btn svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;flex-shrink:0;}
 .tx-line-row.tx-line-highlight{background:rgba(231,76,60,.16);animation:txPulse 1.8s ease-out;}
+.tx-date-sep{display:flex;align-items:center;gap:10px;padding:12px 12px 6px;}
+.tx-date-sep::before,.tx-date-sep::after{content:'';flex:1;height:1px;background:var(--border2);}
+.tx-date-sep span{font-family:var(--mono);font-size:9px;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;}
 @keyframes txPulse{0%{background:rgba(231,76,60,.32);}100%{background:rgba(231,76,60,.05);}}
 
 /* Mobile skinny row — sits directly under the Incidents/Radio tab bar */
@@ -206,7 +210,7 @@ audio{display:none;}
 .mnb-lbl{font-size:9px;letter-spacing:.5px;text-transform:uppercase;font-family:var(--mono);}
 @media(max-width:860px){.side{display:none;}.stat .stat-lbl{font-size:8px;}.stat-n{font-size:18px;}}
 @media(max-width:580px){
-  #stat-mostcalls{font-size:13px;}
+  #stat-mostcalls{font-size:11px;}
   .tb-pill-desktop{display:none;}.tb-pill-mobile{display:flex;}
   .topbar{padding:0 10px;}.tb-sub,.tb-date{display:none;}.tb-clock{font-size:14px;}
   .tb-name-full{display:none;}.tb-name-short{display:inline;}
@@ -264,6 +268,12 @@ audio{display:none;}
 .dept-filter-btn:disabled{opacity:.5;cursor:not-allowed;}
 .dept-loading-row{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px 18px;color:var(--text3);font-family:var(--mono);font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;}
 .dept-loading-spin{width:13px;height:13px;border:2px solid var(--border2);border-top-color:var(--blue-bright);border-radius:50%;animation:ptrSpin .6s linear infinite;flex-shrink:0;}
+.dept-loading-progress{text-align:center;padding:0 18px 16px;font-family:var(--mono);font-size:10px;color:var(--text3);letter-spacing:.5px;}
+
+.delay-note{
+  color:var(--text3);
+  font-weight:400;
+}
 
 .dept-list-wrap{overflow-y:auto;flex:1;padding:8px 0;}
 .dept-list-wrap::-webkit-scrollbar{width:4px;}.dept-list-wrap::-webkit-scrollbar-thumb{background:var(--border2);}
@@ -350,7 +360,7 @@ audio{display:none;}
     <div class="col-hdr"><span class="col-hdr-title">Active Calls</span><span class="col-hdr-count" id="incident-count">0 calls</span></div>
     <div class="ptr-wrap" id="ptr-wrap"><div class="ptr-spinner" id="ptr-spinner"></div></div>
     <div class="feed" id="incident-feed">
-      <div class="empty"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.0 2.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><div class="empty-msg">Awaiting Dispatch</div></div>
+      <div class="empty"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.0 2.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><div class="empty-msg">Awaiting Dispatch</div><div class="empty-sub">~5s avg</div></div>
     </div>
   </div>
   <div class="side" id="view-side">
@@ -447,6 +457,7 @@ let allLoaded    = false;
 let logAllLoaded = false;
 let isLoading    = false;
 let isLogLoading = false;
+let allTimeTotal = 0;
 
 function getTodayET() {
   return new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
@@ -1043,11 +1054,12 @@ async function fetchStats() {
     const res = await fetch(STATS_API);
     if (!res.ok) return;
     const s = await res.json();
+    allTimeTotal = s.all_time || 0;
     document.getElementById('stat-total').textContent = s.total;
     document.getElementById('stat-last').textContent  = formatLastCall(s.last_call);
     updateMostCallsToday();
     document.getElementById('stat-rate').textContent  = s.rate;
-    document.getElementById('incident-count').textContent = `${s.all_time} total · ${allIncidents.length} loaded`;
+   document.getElementById('incident-count').innerHTML = `<span class="delay-note">~30s delay</span> · ${s.all_time} total · ${allIncidents.length} loaded`;
 
     const types  = s.breakdown || {};
     const sorted = Object.entries(types).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -1125,6 +1137,70 @@ function renderLogEntry(entry) {
       <span class="tx-line-time">${escHtml(entry.time_str||'')}</span>
       <span class="tx-line-text">${escHtml(l)}</span>
     </div>`).join('');
+}
+
+function dateKeyET(ms) {
+  if (!ms) return null;
+  return new Date(ms).toLocaleDateString('en-US', { timeZone: 'America/New_York' });
+}
+function ordinalSuffix(n) {
+  const s = ["th","st","nd","rd"], v = n % 100;
+  return s[(v - 20) % 10] || s[v] || s[0];
+}
+function formatDateSeparator(ms) {
+  const d = new Date(ms);
+  const month = d.toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'long' });
+  const day = parseInt(d.toLocaleDateString('en-US', { timeZone: 'America/New_York', day: 'numeric' }), 10);
+  return `${month} ${day}${ordinalSuffix(day)}`;
+}
+function buildDateSeparator(ms) {
+  return `<div class="tx-date-sep"><span>${escHtml(formatDateSeparator(ms))}</span></div>`;
+}
+
+// Tracks the date currently at the very top and very bottom of the
+// transcript-feed DOM, so we know when a day boundary needs a separator.
+let logFeedNewestDateKey = null;
+let logFeedOldestDateKey = null;
+
+function appendLogEntries(entries) {
+  const tfeed = document.getElementById('transcript-feed');
+  entries.forEach(entry => {
+    const ms = entry.created_at ? new Date(entry.created_at).getTime() : null;
+    const key = dateKeyET(ms);
+    if (key && key !== logFeedOldestDateKey) {
+      tfeed.insertAdjacentHTML('beforeend', buildDateSeparator(ms));
+      logFeedOldestDateKey = key;
+      if (logFeedNewestDateKey === null) logFeedNewestDateKey = key;
+    }
+    tfeed.insertAdjacentHTML('beforeend', renderLogEntry(entry));
+  });
+}
+
+function prependLogEntry(entry) {
+  const tfeed = document.getElementById('transcript-feed');
+  const ms = entry.created_at ? new Date(entry.created_at).getTime() : null;
+  const key = dateKeyET(ms);
+  const html = renderLogEntry(entry);
+
+  if (key && logFeedNewestDateKey && key !== logFeedNewestDateKey) {
+    // Crossed a day boundary since the last entry shown — new separator
+    // and entry become the true top of the feed.
+    tfeed.insertAdjacentHTML('afterbegin', buildDateSeparator(ms) + html);
+  } else {
+    // Same day as what's currently on top — the entry has to land BELOW
+    // the existing date separator, not above it.
+    const topSep = tfeed.querySelector('.tx-date-sep');
+    if (topSep) {
+      topSep.insertAdjacentHTML('afterend', html);
+    } else {
+      tfeed.insertAdjacentHTML('afterbegin', html);
+    }
+  }
+
+  if (key) {
+    logFeedNewestDateKey = key;
+    if (logFeedOldestDateKey === null) logFeedOldestDateKey = key;
+  }
 }
 
 // ── Audio player ──────────────────────────────────────────────────────────
@@ -1389,6 +1465,7 @@ async function ensureDeptDataLoaded(range, token) {
   while (!allLoaded && oldestLoadedTimeMs() > cutoff) {
     if (token !== deptLoadToken) return; // a different range was picked meanwhile — abandon this loop
     await fetchIncidents(currentOffset);
+    if (token === deptLoadToken) renderDeptLoading();
   }
 }
 
@@ -1419,8 +1496,11 @@ function computeDeptTally(range) {
 }
 
 function renderDeptLoading() {
+  const loaded = allIncidents.length;
+  const total = allTimeTotal || loaded;
   document.getElementById('dept-list-wrap').innerHTML =
-    `<div class="dept-loading-row"><div class="dept-loading-spin"></div>Loading call history…</div>`;
+    `<div class="dept-loading-row"><div class="dept-loading-spin"></div>Loading call history…</div>
+     <div class="dept-loading-progress">${loaded} of ${total} calls loaded</div>`;
 }
 
 function renderDeptList(range) {
@@ -1514,20 +1594,28 @@ function renderLsPicker() {
     </div>`;
 }
 
+function renderDeptStatsLoading() {
+  const loaded = allIncidents.length;
+  const total = allTimeTotal || loaded;
+  document.getElementById('deptstats-body').innerHTML = `
+    <div class="ls-back-row"><button class="ls-back-btn" onclick="renderLsPicker()">‹ Back to departments</button></div>
+    <div class="dept-loading-row"><div class="dept-loading-spin"></div>Loading call history…</div>
+    <div class="dept-loading-progress">${loaded} of ${total} calls loaded</div>`;
+}
+
 async function selectLsDept(label) {
   lsCurrentDept = label;
   const token = ++lsLoadToken;
 
   document.getElementById('deptstats-title').textContent = label;
   document.getElementById('deptstats-sub').textContent = 'Loading full call history…';
-  document.getElementById('deptstats-body').innerHTML = `
-    <div class="ls-back-row"><button class="ls-back-btn" onclick="renderLsPicker()">‹ Back to departments</button></div>
-    <div class="dept-loading-row"><div class="dept-loading-spin"></div>Loading call history…</div>`;
+  renderDeptStatsLoading();
 
   // Page in incidents until the backend has nothing older left to give.
   while (!allLoaded) {
     if (token !== lsLoadToken) return; // a different department was picked meanwhile
     await fetchIncidents(currentOffset);
+    if (token === lsLoadToken) renderDeptStatsLoading();
   }
   if (token !== lsLoadToken) return;
 
@@ -1653,13 +1741,11 @@ sseStream.onmessage = (event) => {
   }
 
   if (msg.kind === 'log') {
-    const entry = msg.data;
-    if (knownLogIds.has(String(entry.id))) return;
-    knownLogIds.add(String(entry.id));
-
-    const tfeed = document.getElementById('transcript-feed');
-    tfeed.insertAdjacentHTML('afterbegin', renderLogEntry(entry));
-  }
+  const entry = msg.data;
+  if (knownLogIds.has(String(entry.id))) return;
+  knownLogIds.add(String(entry.id));
+  prependLogEntry(entry);
+}
 };
 
 // ── Paginated fetch: incidents ─────────────────────────────────────────────
@@ -1723,10 +1809,8 @@ async function fetchLog(offset = 0) {
     const newOnes = entries.filter(e => !knownLogIds.has(String(e.id)));
     if (newOnes.length === 0 || entries.length === 0) { logAllLoaded = true; isLogLoading = false; return; }
 
-    newOnes.forEach(e => {
-      knownLogIds.add(String(e.id));
-      tfeed.insertAdjacentHTML('beforeend', renderLogEntry(e));
-    });
+    newOnes.forEach(e => knownLogIds.add(String(e.id)));
+appendLogEntries(newOnes);
 
     if (entries.length < 50) logAllLoaded = true;
     else logOffset = offset + 50;
