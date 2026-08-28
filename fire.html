@@ -779,7 +779,12 @@ const KEYWORD_BANK = {
   "samherst": "Amherst",
   "news at": "Newstead",
   "amherst, sorry": "Amherst Fire",
-  "lane transit": "Main Transit"
+  "lane transit": "Main Transit",
+  "mane": "Main",
+  "sidery": "Snyder",
+  "All right, we itch": "",
+  "slonville": "Swormville",
+  "Town Alana Creek Road": "Tonawanda Creek Road"
 };
 
 function applyKeywordBank(text) {
@@ -1089,7 +1094,7 @@ async function fetchStats() {
     document.getElementById('stat-last').textContent  = formatLastCall(s.last_call);
     updateMostCallsToday();
     updateTodayCallStats();
-   document.getElementById('incident-count').innerHTML = `<span class="delay-note">~30s delay</span> · ${s.all_time} total · ${allIncidents.length} loaded`;
+   document.getElementById('incident-count').innerHTML = `<span class="delay-note">~33s delay</span> · ${s.all_time} total · ${allIncidents.length} loaded`;
 
     const types  = s.breakdown || {};
     const sorted = Object.entries(types).sort((a,b)=>b[1]-a[1]).slice(0,6);
