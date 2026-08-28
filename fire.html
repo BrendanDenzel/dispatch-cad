@@ -847,13 +847,24 @@ function getIncidentTimeMs(inc) {
   return inc.created_at ? new Date(inc.created_at).getTime() : Date.now();
 }
 
+function fuzzyAddressKey(loc) {
+  // Strip a trailing possessive/plural "'s" or "s" from each word so
+  // "Evan Street" and "Evans Street" (or "Evan's") normalize to the same
+  // key for duplicate-address matching.
+  return loc
+    .split(/\s+/)
+    .map(w => w.replace(/'s$/i, '').replace(/s$/i, ''))
+    .join(' ');
+}
+
 function isDuplicateAddress(inc) {
   const loc = normalizeLocationText(inc.location || '').trim().toLowerCase();
   if (!loc) return false;
+  const key = fuzzyAddressKey(loc);
   const t = getIncidentTimeMs(inc);
-  const last = addressLastShown[loc];
+  const last = addressLastShown[key];
     if (last !== undefined && Math.abs(t - last) <= 1800000) return true;
-  addressLastShown[loc] = t;
+  addressLastShown[key] = t;
   return false;
 }
 
@@ -905,8 +916,28 @@ function findDepartmentInText(rawText) {
   return earliestLabel;
 }
 
+function removeRespondingLinesBeforeLocation(text, location) {
+  if (!text) return text;
+  const loc = normalizeLocationText(location || '').trim().toLowerCase();
+  if (!loc) return text;
+
+  const lines = splitTranscript(text);
+  const locIdx = lines.findIndex(l => normalizeLocationText(l).toLowerCase().includes(loc));
+
+  // Location line not found — nothing to anchor the cut to, leave text alone.
+  if (locIdx === -1) return text;
+
+  const filtered = lines.filter((l, i) => {
+    if (i >= locIdx) return true; // keep everything at/after the location line
+    return !/responding/i.test(l); // before it, drop only "responding" lines
+  });
+
+  return filtered.join(' ');
+}
+
 function getTranscriptDept(inc) {
-  return findDepartmentInText(inc.transcript) || findDepartmentInText(inc.notes) || null;
+  const deptScanText = removeRespondingLinesBeforeLocation(inc.transcript, inc.location);
+  return findDepartmentInText(deptScanText) || findDepartmentInText(inc.notes) || null;
 }
 
 function getToneDept(inc) {
