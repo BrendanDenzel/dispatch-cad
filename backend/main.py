@@ -667,25 +667,19 @@ def get_fire_stats():
 
         all_time = db.table(FIRE_INCIDENT_TABLE).select("id", count="exact").execute().count or 0
 
-        total = (db.table(FIRE_INCIDENT_TABLE)
-                 .select("id", count="exact")
-                 .gte("created_at", today_start_utc)
-                 .execute()).count or 0
-
+        # NOTE: "Total Today" and "Calls/Hr" are now computed entirely on
+        # the frontend (from allIncidents, dedup-aware) — this route no
+        # longer queries or calculates them, saving one DB round-trip
+        # (the old separate "total" count query) plus the rate math on
+        # every /fire/stats call (page load, every SSE incident, and the
+        # 60s interval).
         rows = (db.table(FIRE_INCIDENT_TABLE)
-                .select("time_str, created_at, incident_type")
+                .select("time_str, incident_type")
                 .gte("created_at", today_start_utc)
                 .order("created_at", desc=True)
                 .execute()).data or []
 
         last_call = rows[0]["time_str"] if rows else "—"
-
-        rate = "0"
-        if len(rows) > 1:
-            newest = datetime.fromisoformat(rows[0]["created_at"])
-            oldest = datetime.fromisoformat(rows[-1]["created_at"])
-            hrs = max((newest - oldest).total_seconds() / 3600, 0.1)
-            rate = f"{len(rows) / hrs:.1f}"
 
         types = {}
         for r in rows:
@@ -693,15 +687,13 @@ def get_fire_stats():
             types[t] = types.get(t, 0) + 1
 
         return jsonify({
-            "total": total,
             "all_time": all_time,
             "last_call": last_call,
-            "rate": rate,
             "breakdown": types
         })
     except Exception as e:
         print(f"[fire] Stats error: {e}", flush=True)
-        return jsonify({"total": 0, "all_time": 0, "units": 0, "last_call": "—", "rate": "0", "breakdown": {}})
+        return jsonify({"all_time": 0, "last_call": "—", "breakdown": {}})
 
 
 def fire_fetch_playlist() -> list[str]:
