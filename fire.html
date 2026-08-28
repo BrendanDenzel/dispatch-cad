@@ -349,10 +349,10 @@ audio{display:none;}
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="stat-lbl">Total Today</div><div class="stat-n c-blue" id="stat-total">0</div></div>
+  <div class="stat"><div class="stat-lbl">Total Today</div><div class="stat-n c-blue" id="stat-total">—</div></div>
   <div class="stat clickable" id="stat-mostcalls-box" onclick="openDeptModal()"><div class="stat-lbl">Most Today</div><div class="stat-n c-red" id="stat-mostcalls">—</div></div>
   <div class="stat clickable" id="stat-last-box" onclick="openLastCallModal()"><div class="stat-lbl">Last Call</div><div class="stat-n c-amber" id="stat-last">—</div></div>
-  <div class="stat"><div class="stat-lbl">Calls / Hr</div><div class="stat-n c-blue" id="stat-rate">0</div></div>
+  <div class="stat"><div class="stat-lbl">Calls / Hr</div><div class="stat-n c-blue" id="stat-rate">—</div></div>
 </div>
 
 <div class="workspace" id="workspace">
@@ -360,7 +360,7 @@ audio{display:none;}
     <div class="col-hdr"><span class="col-hdr-title">Active Calls</span><span class="col-hdr-count" id="incident-count">0 calls</span></div>
     <div class="ptr-wrap" id="ptr-wrap"><div class="ptr-spinner" id="ptr-spinner"></div></div>
     <div class="feed" id="incident-feed">
-      <div class="empty"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.0 2.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><div class="empty-msg">Awaiting Dispatch</div><div class="empty-sub">~5s avg</div></div>
+      <div class="empty"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.0 2.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg><div class="empty-msg">Awaiting Dispatch</div><div class="empty-sub">~5s avg max</div></div>
     </div>
   </div>
   <div class="side" id="view-side">
@@ -1086,10 +1086,9 @@ async function fetchStats() {
     if (!res.ok) return;
     const s = await res.json();
     allTimeTotal = s.all_time || 0;
-    document.getElementById('stat-total').textContent = s.total;
     document.getElementById('stat-last').textContent  = formatLastCall(s.last_call);
     updateMostCallsToday();
-    document.getElementById('stat-rate').textContent  = s.rate;
+    updateTodayCallStats();
    document.getElementById('incident-count').innerHTML = `<span class="delay-note">~30s delay</span> · ${s.all_time} total · ${allIncidents.length} loaded`;
 
     const types  = s.breakdown || {};
@@ -1497,6 +1496,70 @@ async function ensureDeptDataLoaded(range, token) {
     if (token !== deptLoadToken) return; // a different range was picked meanwhile — abandon this loop
     await fetchIncidents(currentOffset);
     if (token === deptLoadToken) renderDeptLoading();
+  }
+}
+
+// ── Total Today / Calls-Per-Hour — frontend, duplicate-aware ────────────
+// Computed from allIncidents (which already excludes address-duplicates
+// via isDuplicateAddress), same source the "Most Today" leaderboard uses.
+// At normal volume (~30 calls/day) the very first page of 50 already
+// covers all of today, so this almost never needs a second fetch. Never
+// blocks page load — shows "—" until it has real data, same pattern as
+// the department HUD modals use while paging in history.
+let todayStatsToken = 0;
+
+function computeTodayCallStats() {
+  const todays = allIncidents.filter(isToday);
+  const total = todays.length;
+  let rate = '0';
+  if (todays.length > 1) {
+    const times  = todays.map(getIncidentTimeMs);
+    const newest = Math.max(...times);
+    const oldest = Math.min(...times);
+    const hrs    = Math.max((newest - oldest) / 3600000, 0.1);
+    rate = (todays.length / hrs).toFixed(1);
+  }
+  return { total, rate };
+}
+
+function renderTodayCallStats() {
+  // Nothing loaded yet and the backend hasn't confirmed there's nothing
+  // to load — keep showing the dash placeholder rather than a false "0".
+  if (allIncidents.length === 0 && !allLoaded) {
+    document.getElementById('stat-total').textContent = '—';
+    document.getElementById('stat-rate').textContent   = '—';
+    return;
+  }
+  const { total, rate } = computeTodayCallStats();
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-rate').textContent   = rate;
+}
+
+// Pages in more incidents ONLY while the oldest incident currently loaded
+// is still from today — i.e. we can't yet be sure we have the whole day.
+// Stops immediately (no fetch) once that's no longer true, or once the
+// backend has nothing older left (allLoaded).
+async function ensureTodayDataLoaded(token) {
+  while (!allLoaded && (allIncidents.length === 0 || isToday(allIncidents[allIncidents.length - 1]))) {
+    if (token !== todayStatsToken) return; // a newer call superseded this one — abandon
+    if (isLoading) {
+      // Another fetch (e.g. the initial page load) is already in flight —
+      // wait for it instead of racing it with a second fetchIncidents call.
+      await new Promise(r => setTimeout(r, 150));
+      continue;
+    }
+    await fetchIncidents(currentOffset);
+  }
+}
+
+async function updateTodayCallStats() {
+  const token = ++todayStatsToken;
+  // Show whatever's already loaded immediately — avoids an unnecessary
+  // dash flash if today was already fully covered by earlier pagination.
+  renderTodayCallStats();
+  if (!allLoaded && (allIncidents.length === 0 || isToday(allIncidents[allIncidents.length - 1]))) {
+    await ensureTodayDataLoaded(token);
+    if (token === todayStatsToken) renderTodayCallStats();
   }
 }
 
