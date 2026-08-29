@@ -215,6 +215,20 @@ def get_duration(audio_bytes: bytes) -> float:
     finally:
         os.unlink(path)
 
+def _extract_clip(mp3_path: str, start: float, end: float) -> bytes:
+    """Cuts [start, end] seconds out of an mp3 file on disk and returns the bytes."""
+    out_path = mp3_path + f".clip_{start:.2f}_{end:.2f}.mp3"
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", mp3_path,
+         "-ss", str(max(0, start)), "-to", str(end), "-c", "copy", out_path],
+        capture_output=True, timeout=30
+    )
+    try:
+        with open(out_path, "rb") as f:
+            return f.read()
+    finally:
+        if os.path.exists(out_path):
+            os.unlink(out_path)
 
 def convert_to_mp3(ts_bytes: bytes) -> bytes | None:
     if not ts_bytes:
@@ -353,22 +367,61 @@ def delete_audio(audio_url: str):
         print(f"Audio delete error: {e}", flush=True)
 
 
-def transcribe(audio_bytes: bytes) -> str:
+def transcribe(audio_bytes: bytes, _is_retry: bool = False) -> str:
+    tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             f.write(audio_bytes)
             tmp_path = f.name
+
         with open(tmp_path, "rb") as f:
             result = groq_client.audio.transcriptions.create(
                 file=("audio.mp3", f, "audio/mpeg"),
                 model="whisper-large-v3-turbo",
-                response_format="text"
+                response_format="verbose_json"
             )
-        os.unlink(tmp_path)
-        return result.strip() if result else ""
+
+        text = (result.text or "").strip()
+        segments = result.segments or []
+
+        if not segments or _is_retry:
+            return text
+
+        def seg_time(seg, key):
+            return seg[key] if isinstance(seg, dict) else getattr(seg, key)
+
+        first_start = seg_time(segments[0], "start")
+        last_end    = seg_time(segments[-1], "end")
+        real_duration = get_duration(audio_bytes)
+
+        head_gap = first_start
+        tail_gap = real_duration - last_end
+
+        pieces = []
+
+        if head_gap > 15.0:
+            print(f"[transcribe] head skipped: transcript starts at {first_start:.1f}s, retrying head", flush=True)
+            head_bytes = _extract_clip(tmp_path, 0, min(real_duration, first_start + 0.5))
+            head_text = transcribe(head_bytes, _is_retry=True)
+            if head_text:
+                pieces.append(head_text)
+
+        pieces.append(text)
+
+        if tail_gap > 5.0:
+            print(f"[transcribe] tail skipped: covered {last_end:.1f}s of {real_duration:.1f}s, retrying tail", flush=True)
+            tail_bytes = _extract_clip(tmp_path, max(0, last_end - 0.5), real_duration)
+            tail_text = transcribe(tail_bytes, _is_retry=True)
+            if tail_text:
+                pieces.append(tail_text)
+
+        return " ".join(p for p in pieces if p).strip()
     except Exception as e:
         print(f"Transcription error: {e}", flush=True)
         return ""
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 PARSE_PROMPT = """You are a police dispatch parser for Erie County / Amherst NY.
@@ -811,22 +864,61 @@ def fire_upload_audio(audio_bytes: bytes) -> str | None:
         return None
 
 
-def fire_transcribe(audio_bytes: bytes) -> str:
+def fire_transcribe(audio_bytes: bytes, _is_retry: bool = False) -> str:
+    tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
             f.write(audio_bytes)
             tmp_path = f.name
+
         with open(tmp_path, "rb") as f:
             result = fire_groq_client.audio.transcriptions.create(
                 file=("audio.mp3", f, "audio/mpeg"),
                 model="whisper-large-v3-turbo",
-                response_format="text"
+                response_format="verbose_json"
             )
-        os.unlink(tmp_path)
-        return result.strip() if result else ""
+
+        text = (result.text or "").strip()
+        segments = result.segments or []
+
+        if not segments or _is_retry:
+            return text
+
+        def seg_time(seg, key):
+            return seg[key] if isinstance(seg, dict) else getattr(seg, key)
+
+        first_start = seg_time(segments[0], "start")
+        last_end    = seg_time(segments[-1], "end")
+        real_duration = get_duration(audio_bytes)
+
+        head_gap = first_start
+        tail_gap = real_duration - last_end
+
+        pieces = []
+
+        if head_gap > 15.0:
+            print(f"[fire] head skipped: transcript starts at {first_start:.1f}s, retrying head", flush=True)
+            head_bytes = _extract_clip(tmp_path, 0, min(real_duration, first_start + 0.5))
+            head_text = fire_transcribe(head_bytes, _is_retry=True)
+            if head_text:
+                pieces.append(head_text)
+
+        pieces.append(text)
+
+        if tail_gap > 5.0:
+            print(f"[fire] tail skipped: covered {last_end:.1f}s of {real_duration:.1f}s, retrying tail", flush=True)
+            tail_bytes = _extract_clip(tmp_path, max(0, last_end - 0.5), real_duration)
+            tail_text = fire_transcribe(tail_bytes, _is_retry=True)
+            if tail_text:
+                pieces.append(tail_text)
+
+        return " ".join(p for p in pieces if p).strip()
     except Exception as e:
         print(f"[fire] Transcription error: {e}", flush=True)
         return ""
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 FIRE_PARSE_PROMPT = """You are a fire/EMS dispatch parser for Amherst NY (Erie County).
