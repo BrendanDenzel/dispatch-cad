@@ -1105,12 +1105,24 @@ def _group_tone_segments(track):
     return [s for s in segs if s["duration"] >= TONE_MIN_DURATION_SEC]
 
 
+# new
 def detect_two_tone_department(audio_bytes: bytes) -> str | None:
-    """Returns the matched station NAME if a tone-segment pair from the
-    clip matches a known department's tone pair within tolerance, else
-    None. Prefers the first two qualifying tone segments; if that pair
+    """Returns the matched station NAME(s) if tone-segment pair(s) from the
+    clip match known department tone pairs within tolerance, else None.
+
+    Normally prefers the first two qualifying tone segments; if that pair
     doesn't match any station, falls back to the last two segments before
-    giving up."""
+    giving up.
+
+    A single department's pair plays twice in a row (4 segments:
+    T1,T2,T1,T2). Two departments dispatched together interleave instead —
+    both pairs play once in turn, then the whole sequence repeats:
+    [D1-T1, D1-T2, D2-T1, D2-T2, D1-T1, D1-T2, D2-T1, D2-T2] — 8 segments.
+    Only treat a clip as two-department when segment count lands right
+    around 8 (9 allowed too, in case one spurious extra segment got picked
+    up) — any other count falls through to the normal single-pair path so
+    stray noise doesn't get misread as a second department. When both
+    departments are found, they're joined "Dept A, Dept B" for storage."""
     try:
         sr = 8000
         pcm = _tone_decode_pcm(audio_bytes, sr)
@@ -1126,6 +1138,16 @@ def detect_two_tone_department(audio_bytes: bytes) -> str | None:
                     abs(f2 - st["f2"]) / st["f2"] <= TONE_MATCH_TOLERANCE):
                     return st["name"]
             return None
+
+        if 8 <= len(segs) <= 9:
+            d1 = (match_pair(segs[0]["freq"], segs[1]["freq"]) or
+                  match_pair(segs[4]["freq"], segs[5]["freq"]))
+            d2 = (match_pair(segs[2]["freq"], segs[3]["freq"]) or
+                  match_pair(segs[6]["freq"], segs[7]["freq"]))
+            depts = [d for d in (d1, d2) if d]
+            if depts:
+                return ", ".join(depts)
+            # neither department matched — fall through to single-pair logic
 
         # Prefer the first two qualifying segments in the clip.
         matched = match_pair(segs[0]["freq"], segs[1]["freq"])
