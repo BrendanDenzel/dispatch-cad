@@ -392,7 +392,7 @@ def transcribe(audio_bytes: bytes, _is_retry: bool = False) -> str:
 
         first_start = seg_time(segments[0], "start")
         last_end    = seg_time(segments[-1], "end")
-        real_duration = get_duration(audio_bytes)
+        real_duration = getattr(result, "duration", None) or get_duration(audio_bytes)
 
         head_gap = first_start
         tail_gap = real_duration - last_end
@@ -889,7 +889,7 @@ def fire_transcribe(audio_bytes: bytes, _is_retry: bool = False) -> str:
 
         first_start = seg_time(segments[0], "start")
         last_end    = seg_time(segments[-1], "end")
-        real_duration = get_duration(audio_bytes)
+        real_duration = getattr(result, "duration", None) or get_duration(audio_bytes)
 
         head_gap = first_start
         tail_gap = real_duration - last_end
