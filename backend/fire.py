@@ -1,0 +1,970 @@
+import os, time, threading, tempfile, json, subprocess, difflib
+import numpy as np
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from urllib.parse import urljoin
+from concurrent.futures import ThreadPoolExecutor
+from flask import Flask, jsonify, request, Response
+from flask_cors import CORS
+from groq import Groq
+from supabase import create_client
+from collections import deque
+
+GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
+SUPABASE_URL   = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY   = os.environ.get("SUPABASE_KEY")
+STREAM_URL     = os.environ.get("STREAM_URL")   # fire/EMS .m3u8 playlist URL
+SEG_DURATION   = 4.032 # seconds per HLS segment, from the playlist's #EXTINF value
+AUDIO_BUCKET   = "audio-clips"
+
+EASTERN     = ZoneInfo("America/New_York")
+fire_groq_client = Groq(api_key=GROQ_API_KEY)
+
+def get_db():
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
+
+app = Flask(__name__)
+CORS(app)
+
+@app.after_request
+def add_headers(response):
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["X-Accel-Buffering"] = "no"
+    return response
+
+@app.route("/ping")
+def ping():
+    return "pong", 200
+
+
+# ─────────────────────────────────────────────
+# Shared low-level helpers (curl/ffmpeg/ffprobe) — duplicated here since
+# this now runs as its own standalone service, separate from police.py.
+# ─────────────────────────────────────────────
+
+def curl_fetch(url: str) -> bytes:
+    result = subprocess.run(
+        ["curl", "-sS", "-f", "--max-time", "15", url],
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
+                            f"{result.stderr.decode(errors='ignore')[:200]}")
+    return result.stdout
+
+
+def get_duration(audio_bytes: bytes) -> float:
+    """Measure actual duration (in seconds) of audio bytes via ffprobe."""
+    if not audio_bytes:
+        return 0.0
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        f.write(audio_bytes)
+        path = f.name
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            capture_output=True, text=True, timeout=15
+        )
+        return float(result.stdout.strip())
+    except Exception as e:
+        print(f"[capture] ffprobe duration check failed: {e}", flush=True)
+        return -1.0
+    finally:
+        os.unlink(path)
+
+
+def _extract_clip(mp3_path: str, start: float, end: float) -> bytes:
+    """Cuts [start, end] seconds out of an mp3 file on disk and returns the bytes."""
+    out_path = mp3_path + f".clip_{start:.2f}_{end:.2f}.mp3"
+    subprocess.run(
+        ["ffmpeg", "-y", "-loglevel", "error", "-i", mp3_path,
+         "-ss", str(max(0, start)), "-to", str(end), "-c", "copy", out_path],
+        capture_output=True, timeout=30
+    )
+    try:
+        with open(out_path, "rb") as f:
+            return f.read()
+    finally:
+        if os.path.exists(out_path):
+            os.unlink(out_path)
+
+
+def convert_to_mp3(ts_bytes: bytes) -> bytes | None:
+    if not ts_bytes:
+        return None
+
+    in_path = tempfile.NamedTemporaryFile(suffix=".ts", delete=False).name
+    out_path = in_path.replace(".ts", ".mp3")
+    with open(in_path, "wb") as f:
+        f.write(ts_bytes)
+
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", in_path,
+        "-vn", "-ac", "1", "-ar", "16000",
+        "-acodec", "libmp3lame", "-b:a", "64k",
+        out_path,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=120)
+    finally:
+        os.unlink(in_path)
+
+    if result.returncode != 0 or not os.path.exists(out_path) or os.path.getsize(out_path) < 1000:
+        err = result.stderr.decode(errors="ignore")[-300:] if result.stderr else ""
+        print(f"[capture] ffmpeg convert failed: {err}", flush=True)
+        if os.path.exists(out_path):
+            os.unlink(out_path)
+        return None
+
+    with open(out_path, "rb") as f:
+        data = f.read()
+    os.unlink(out_path)
+    return data
+
+
+def trim_silence(audio_bytes: bytes) -> bytes:
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as fin:
+            fin.write(audio_bytes)
+            in_path = fin.name
+        out_path = in_path.replace(".mp3", "_trimmed.mp3")
+
+        result = subprocess.run([
+            "ffmpeg", "-y", "-i", in_path,
+            "-af",
+            "silenceremove=start_periods=1:start_silence=0.5:start_threshold=-40dB"
+            ":stop_periods=-1:stop_silence=0.5:stop_threshold=-40dB",
+            "-b:a", "64k",
+            out_path
+        ], capture_output=True, timeout=30)
+
+        os.unlink(in_path)
+
+        if result.returncode != 0 or not os.path.exists(out_path):
+            print("ffmpeg failed, using original audio", flush=True)
+            return audio_bytes
+
+        with open(out_path, "rb") as f:
+            trimmed = f.read()
+        os.unlink(out_path)
+
+        if len(trimmed) < 1000:
+            print("Trim: pure silence detected, skipping", flush=True)
+            return b""
+
+        print(f"Trim: {len(audio_bytes)//1024}KB → {len(trimmed)//1024}KB", flush=True)
+        return trimmed
+
+    except Exception as e:
+        print(f"Trim error: {e}", flush=True)
+        return audio_bytes
+
+
+def delete_audio(audio_url: str):
+    try:
+        db     = get_db()
+        marker = f"/public/{AUDIO_BUCKET}/"
+        if marker in audio_url:
+            db.storage.from_(AUDIO_BUCKET).remove([audio_url.split(marker, 1)[1]])
+    except Exception as e:
+        print(f"Audio delete error: {e}", flush=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# FIRE / EMS SECTION
+# ═════════════════════════════════════════════════════════════════════════
+
+fire_clients = []
+
+FIRE_MAX_INCIDENTS = 5000
+FIRE_MAX_LOG_ROWS  = 5000
+FIRE_AUDIO_PREFIX  = "fire_clips"      # same AUDIO_BUCKET, separate folder from police "clips/"
+FIRE_INCIDENT_TABLE = "fire_incidents"
+FIRE_LOG_TABLE       = "fire_radio_log"
+GEOCODE_CACHE_TABLE  = "geocode_cache"   # server-side cache of resolved map coordinates
+FIRE_SEG_SILENCE_DB      = -40.0  # ffmpeg mean_volume threshold; segments quieter than this = silence
+FIRE_PREROLL_SEGMENTS    = 1      # keep this many segments (~4s) buffered before a trigger, so we don't clip the start of a call
+FIRE_HANGOVER_SEGMENTS   = 3      # end capture after this many consecutive silent segments (~4s of quiet)
+FIRE_MAX_CLIP_SEGMENTS   = 15     # safety cap (~60s) in case a call/noise never goes quiet
+FIRE_VAD_CHECK_EVERY_N   = 2      # only actually run ffmpeg volumedetect on every Nth
+                                   # segment — cuts ffmpeg spawn rate roughly in half,
+                                   # still detects speech onset within ~8s instead of ~4s
+
+
+# Repeated-transmission de-dupe: fire/EMS dispatch conventionally reads a
+# call out twice. We keep a short rolling memory of recent call text and
+# skip creating a second incident card if something very similar just came
+# through — the repeat still gets logged to the radio log, just not carded.
+FIRE_DEDUP_WINDOW_SECONDS       = 300
+FIRE_DEDUP_SIMILARITY_THRESHOLD = 0.55
+_fire_recent_calls = []  # list of (timestamp, normalized_text)
+_fire_recent_calls_lock = threading.Lock()
+
+# Shared pool for running tone detection and transcription concurrently
+# in fire_process_audio_chunk (they're independent of each other and can
+# overlap: tone detection is CPU/subprocess-bound, transcription is
+# network/I/O-bound waiting on Groq).
+_fire_concurrency_pool = ThreadPoolExecutor(max_workers=2)
+
+def fire_segment_mean_volume_db(seg_bytes: bytes) -> float:
+    """Returns the mean volume (dB) of a single ~4s TS segment via ffmpeg's
+    volumedetect filter. Used as the voice-activity trigger — cheap enough
+    to run on every segment as it arrives."""
+    if not seg_bytes:
+        return -99.0
+    with tempfile.NamedTemporaryFile(suffix=".ts", delete=False) as f:
+        f.write(seg_bytes)
+        path = f.name
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-i", path, "-af", "volumedetect", "-f", "null", "-"],
+            capture_output=True, text=True, timeout=30
+        )
+        for line in result.stderr.splitlines():
+            if "mean_volume:" in line:
+                return float(line.split("mean_volume:")[1].strip().split(" ")[0])
+        return -99.0
+    except Exception as e:
+        print(f"[fire-vad] volume check failed: {e}", flush=True)
+        return -99.0
+    finally:
+        os.unlink(path)
+
+
+@app.route("/fire/incidents")
+def get_fire_incidents():
+    offset = request.args.get("offset", 0, type=int)
+    res = (get_db().table(FIRE_INCIDENT_TABLE)
+           .select("*")
+           .order("created_at", desc=True)
+           .range(offset, offset + 49)
+           .execute())
+    return jsonify(res.data)
+
+
+@app.route("/fire/radio-log")
+def get_fire_radio_log():
+    """Flat, unstructured, everything-that-was-said transcript feed — not
+    tied to incidents at all."""
+    offset = request.args.get("offset", 0, type=int)
+    res = (get_db().table(FIRE_LOG_TABLE)
+           .select("*")
+           .order("created_at", desc=True)
+           .range(offset, offset + 49)
+           .execute())
+    return jsonify(res.data)
+
+
+# ─────────────────────────────────────────────
+# Geocode cache proxy — the frontend never talks to Supabase directly for
+# this. It hits these two routes; the Supabase URL/key stay server-side.
+# ─────────────────────────────────────────────
+
+def _geocode_key(loc: str) -> str:
+    return " ".join(loc.strip().lower().split())
+
+
+@app.route("/fire/geocode", methods=["GET"])
+def get_geocode_cache():
+    loc = request.args.get("location", "", type=str)
+    key = _geocode_key(loc)
+    if not key:
+        return jsonify({"error": "location required"}), 400
+    try:
+        res = (get_db().table(GEOCODE_CACHE_TABLE)
+               .select("lat,lng")
+               .eq("location_key", key)
+               .limit(1)
+               .execute())
+        if res.data:
+            return jsonify(res.data[0])
+        return jsonify(None), 404
+    except Exception as e:
+        print(f"[geocode-cache] get error: {e}", flush=True)
+        return jsonify(None), 500
+
+
+@app.route("/fire/geocode", methods=["POST"])
+def save_geocode_cache():
+    body = request.get_json(silent=True) or {}
+    loc  = body.get("location", "")
+    lat  = body.get("lat")
+    lng  = body.get("lng")
+    key  = _geocode_key(loc)
+    if not key or lat is None or lng is None:
+        return jsonify({"error": "location, lat, lng required"}), 400
+    try:
+        get_db().table(GEOCODE_CACHE_TABLE).upsert({
+            "location_key":      key,
+            "original_location": loc.strip(),
+            "lat":               lat,
+            "lng":               lng,
+        }).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        print(f"[geocode-cache] save error: {e}", flush=True)
+        return jsonify({"ok": False}), 500
+
+
+@app.route("/fire/stream")
+def fire_stream():
+    def event_stream():
+        fire_clients.append(queue := [])
+        try:
+            while True:
+                if queue:
+                    data = queue.pop(0)
+                    yield f"data: {json.dumps(data)}\n\n"
+                time.sleep(0.1)
+        except GeneratorExit:
+            fire_clients.remove(queue)
+    return Response(event_stream(), mimetype="text/event-stream")
+
+
+def fire_broadcast(kind: str, data: dict):
+    payload = {"kind": kind, "data": data}
+    for q in fire_clients:
+        q.append(payload)
+
+
+@app.route("/fire/stats")
+def get_fire_stats():
+    try:
+        db = get_db()
+        now_et = datetime.now(EASTERN)
+        today_start = now_et.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start_utc = today_start.astimezone(ZoneInfo("UTC")).isoformat()
+
+        all_time = db.table(FIRE_INCIDENT_TABLE).select("id", count="exact").execute().count or 0
+
+        # NOTE: "Total Today" and "Calls/Hr" are now computed entirely on
+        # the frontend (from allIncidents, dedup-aware) — this route no
+        # longer queries or calculates them, saving one DB round-trip
+        # (the old separate "total" count query) plus the rate math on
+        # every /fire/stats call (page load, every SSE incident, and the
+        # 60s interval).
+        rows = (db.table(FIRE_INCIDENT_TABLE)
+                .select("time_str, incident_type")
+                .gte("created_at", today_start_utc)
+                .order("created_at", desc=True)
+                .execute()).data or []
+
+        last_call = rows[0]["time_str"] if rows else "—"
+
+        types = {}
+        for r in rows:
+            t = r.get("incident_type") or "Unknown"
+            types[t] = types.get(t, 0) + 1
+
+        return jsonify({
+            "all_time": all_time,
+            "last_call": last_call,
+            "breakdown": types
+        })
+    except Exception as e:
+        print(f"[fire] Stats error: {e}", flush=True)
+        return jsonify({"all_time": 0, "last_call": "—", "breakdown": {}})
+
+
+def fire_fetch_playlist() -> list[str]:
+    text = curl_fetch(STREAM_URL).decode()
+    return [
+        urljoin(STREAM_URL, line.strip())
+        for line in text.splitlines()
+        if line.strip() and not line.startswith("#")
+    ]
+
+
+def fire_scanner_loop():
+    """Voice-activated capture with pre-roll. Instead of grabbing a fixed
+    60s window and hoping a call doesn't straddle the boundary, this watches
+    each ~4s segment as it rolls in and only starts accumulating a clip once
+    it actually hears audio — seeded with a bit of pre-roll so the start of
+    the call isn't clipped. It keeps capturing until a run of silent
+    segments (hangover) says the call is over, then hands the whole clip
+    off to fire_process_audio_chunk untouched, same as before."""
+    if not STREAM_URL:
+        print("[fire-scanner] STREAM_URL not set — nothing to capture.", flush=True)
+        return
+
+    print("[fire-scanner] Starting VAD capture loop against:", STREAM_URL, flush=True)
+
+    seen_urls = deque(maxlen=500)
+    seen_set = set()
+    preroll_buffer = deque(maxlen=FIRE_PREROLL_SEGMENTS)
+    capture_buffer = []
+    capturing = False
+    silent_run = 0
+    seg_counter = 0
+    last_has_audio = False
+
+    while True:
+        try:
+            segments = fire_fetch_playlist()
+        except Exception as e:
+            print(f"[fire-scanner] playlist fetch failed: {e}", flush=True)
+            time.sleep(SEG_DURATION)
+            continue
+
+        new_segments = [s for s in segments if s not in seen_set]
+        if not new_segments:
+            time.sleep(SEG_DURATION)
+            continue
+
+        for url in new_segments:
+            seen_urls.append(url)
+            seen_set = set(seen_urls)
+
+            try:
+                seg_bytes = curl_fetch(url)
+            except Exception as e:
+                print(f"[fire-scanner] segment fetch failed: {e}", flush=True)
+                continue
+
+            seg_counter += 1
+            if seg_counter % FIRE_VAD_CHECK_EVERY_N == 0:
+                vol_db = fire_segment_mean_volume_db(seg_bytes)
+                has_audio = vol_db > FIRE_SEG_SILENCE_DB
+                last_has_audio = has_audio
+            else:
+                has_audio = last_has_audio  # reuse last check, skip spawning ffmpeg this round
+
+            if not capturing:
+                if has_audio:
+                    print(f"[fire-scanner] audio detected ({vol_db:.1f}dB) — starting capture", flush=True)
+                    capture_buffer = list(preroll_buffer) + [seg_bytes]  # true pre-roll + trigger segment
+                    capturing = True
+                    silent_run = 0
+                else:
+                    preroll_buffer.append(seg_bytes)
+                continue
+
+            # capturing
+            capture_buffer.append(seg_bytes)
+            silent_run = 0 if has_audio else silent_run + 1
+
+            ended     = silent_run >= FIRE_HANGOVER_SEGMENTS
+            too_long  = len(capture_buffer) >= FIRE_MAX_CLIP_SEGMENTS
+
+            if ended or too_long:
+                reason = "hit max length" if too_long else "went quiet"
+                print(f"[fire-scanner] capture ended ({reason}), {len(capture_buffer)} segments — processing", flush=True)
+                ts_bytes = b"".join(capture_buffer)
+                try:
+                    mp3 = convert_to_mp3(ts_bytes)
+                    if mp3:
+                        dur = get_duration(mp3)
+                        print(f"[fire-scanner] clip duration: {dur:.1f}s, {len(mp3)} bytes", flush=True)
+                        fire_process_audio_chunk(mp3)
+                except Exception as e:
+                    import traceback
+                    print(f"[fire-scanner] error: {e}", flush=True)
+                    traceback.print_exc()
+
+                capture_buffer = []
+                capturing = False
+                silent_run = 0
+                preroll_buffer.clear()
+
+
+def fire_upload_audio(audio_bytes: bytes) -> str | None:
+    try:
+        db   = get_db()
+        ts   = datetime.now(EASTERN).strftime("%Y%m%d_%H%M%S")
+        path = f"{FIRE_AUDIO_PREFIX}/clip_{ts}.mp3"
+        db.storage.from_(AUDIO_BUCKET).upload(
+            path, audio_bytes, {"content-type": "audio/mpeg", "upsert": "false"}
+        )
+        return f"{SUPABASE_URL}/storage/v1/object/public/{AUDIO_BUCKET}/{path}"
+    except Exception as e:
+        print(f"[fire] Audio upload error: {e}", flush=True)
+        return None
+
+
+def fire_transcribe(audio_bytes: bytes, _is_retry: bool = False) -> str:
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            f.write(audio_bytes)
+            tmp_path = f.name
+
+        with open(tmp_path, "rb") as f:
+            result = fire_groq_client.audio.transcriptions.create(
+                file=("audio.mp3", f, "audio/mpeg"),
+                model="whisper-large-v3-turbo",
+                response_format="verbose_json"
+            )
+
+        text = (result.text or "").strip()
+        segments = result.segments or []
+
+        if not segments or _is_retry:
+            return text
+
+        def seg_time(seg, key):
+            return seg[key] if isinstance(seg, dict) else getattr(seg, key)
+
+        first_start = seg_time(segments[0], "start")
+        last_end    = seg_time(segments[-1], "end")
+        real_duration = getattr(result, "duration", None) or get_duration(audio_bytes)
+
+        head_gap = first_start
+        tail_gap = real_duration - last_end
+
+        pieces = []
+
+        if head_gap > 15.0:
+            print(f"[fire] head skipped: transcript starts at {first_start:.1f}s, retrying head", flush=True)
+            head_bytes = _extract_clip(tmp_path, 0, min(real_duration, first_start + 0.5))
+            head_text = fire_transcribe(head_bytes, _is_retry=True)
+            if head_text:
+                pieces.append(head_text)
+
+        pieces.append(text)
+
+        if tail_gap > 5.0:
+            print(f"[fire] tail skipped: covered {last_end:.1f}s of {real_duration:.1f}s, retrying tail", flush=True)
+            tail_bytes = _extract_clip(tmp_path, max(0, last_end - 0.5), real_duration)
+            tail_text = fire_transcribe(tail_bytes, _is_retry=True)
+            if tail_text:
+                pieces.append(tail_text)
+
+        return " ".join(p for p in pieces if p).strip()
+    except Exception as e:
+        print(f"[fire] Transcription error: {e}", flush=True)
+        return ""
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+FIRE_PARSE_PROMPT = """You are a fire/EMS dispatch parser for Amherst NY (Erie County).
+Extract structured data from this radio transcript, ONLY if it represents an
+actual NEW dispatch / call being issued (a box alarm, EMS call, MVA, fire
+call, alarm activation, rescue, hazmat, mutual aid, etc.).
+
+Transcript: {transcript}
+
+Rules — return exactly the word null (no quotes, no JSON) if ANY of these apply:
+- The transcript is ONLY a unit acknowledging, responding to, or giving a
+  status update on a call already in progress (e.g. "Engine 4 responding",
+  "Ladder 12 en route", "Medic 3 available", "10-8", "show us on scene",
+  "command established") with no new incident information.
+- The transcript is static, silence, dead air, or otherwise not real
+  dispatch content.
+
+Otherwise, respond ONLY with a valid JSON object with these exact fields:
+- incident_type: string (e.g. "Structure Fire", "Vehicle Fire", "Brush Fire", "EMS - Medical", "MVA", "Alarm Activation", "Rescue", "Hazmat", "Mutual Aid", "Unknown")
+- location: string — the SINGLE primary dispatch address ONLY, or "Unknown". Rules for this field:
+  - Return exactly ONE house/building number plus ONE street name, e.g. "1551 Charles Gate Circle" or "12976 Main Road". Nothing else.
+  - Do NOT append cross streets, nearby landmarks, business names, or "between X and Y" reference points, even if the transcript mentions them — e.g. if the transcript says "12976 Main Road at McDonald's between South Newstead and Buell Street", return only "12976 Main Road".
+  - Do NOT concatenate multiple streets or addresses with "and"/"," even if several are mentioned in the same transmission — e.g. if the transcript says "1551 Charles Gate Circle, Old Oak Post Road and Greenwood Drive", return only "1551 Charles Gate Circle" (the actual numbered address, not the unnumbered streets near it).
+  - If a numbered address is present anywhere in the transcript, always prefer it over any bare street name or intersection.
+  - Only return a bare street name or intersection (no house number) if NO numbered address is mentioned anywhere in the transcript.
+- priority: string, one of exactly: "FIRE", "EMS", "UNKNOWN" — classify the call itself: use "FIRE" for alarm activations, structure fires, vehicle fires, brush fires, hazmat, or any other fire-related call; use "EMS" for medical calls, injuries, difficulty breathing, rescues, or anything involving a person's health/condition; use "UNKNOWN" for anything that doesn't clearly fall into either of those
+- notes: string (any other relevant detail, max 1 sentence)
+
+Return raw JSON only. No markdown, no explanation, no code blocks."""
+
+
+def fire_parse_transcript(transcript: str):
+    try:
+        resp = fire_groq_client.chat.completions.create(
+            model="openai/gpt-oss-120b",
+            messages=[{"role": "user", "content": FIRE_PARSE_PROMPT.format(transcript=transcript)}],
+            max_tokens=600,
+            temperature=0.1,
+            reasoning_effort="low"
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        if not text:
+            print(f"[fire] Parse warning: empty response, finish_reason={resp.choices[0].finish_reason}", flush=True)
+            return None
+        if text.lower() == "null":
+            return None
+        return json.loads(text.replace("```json", "").replace("```", "").strip())
+    except Exception as e:
+        print(f"[fire] Parse error: {e}", flush=True)
+        return None
+
+def _fire_normalize(text: str) -> str:
+    return " ".join(text.strip().lower().split())
+
+
+def fire_is_duplicate_call(transcript: str) -> bool:
+    """True if this transcript is a near-repeat of a call we heard in the
+    last FIRE_DEDUP_WINDOW_SECONDS — i.e. the second time dispatch reads
+    out the same call. Keeps us from double-carding one incident."""
+    now = time.time()
+    norm = _fire_normalize(transcript)
+    with _fire_recent_calls_lock:
+        global _fire_recent_calls
+        _fire_recent_calls = [(t, txt) for (t, txt) in _fire_recent_calls if now - t < FIRE_DEDUP_WINDOW_SECONDS]
+        for (_, txt) in _fire_recent_calls:
+            if difflib.SequenceMatcher(None, norm, txt).ratio() >= FIRE_DEDUP_SIMILARITY_THRESHOLD:
+                return True
+    return False
+
+
+def fire_remember_call(transcript: str):
+    with _fire_recent_calls_lock:
+        _fire_recent_calls.append((time.time(), _fire_normalize(transcript)))
+
+
+# Mirrors the frontend's isValidAddress() check (fire.html) — a
+# location only counts as "real" if it exists, is more than a few
+# characters after trimming, and doesn't just say "Unknown"/"Unknown
+# Location". Used below to decide whether an incident is even worth
+# saving to the database at all, instead of relying on the frontend to
+# hide addressless cards after the fact.
+def fire_is_valid_address(location: str | None) -> bool:
+    if not location:
+        return False
+    loc = location.strip()
+    if len(loc) < 5:
+        return False
+    if loc.lower().startswith("unknown"):
+        return False
+    return True
+
+
+def fire_purge_old_incidents():
+    try:
+        db    = get_db()
+        total = db.table(FIRE_INCIDENT_TABLE).select("id", count="exact").execute().count or 0
+        if total <= FIRE_MAX_INCIDENTS:
+            return
+        oldest = (db.table(FIRE_INCIDENT_TABLE)
+                  .select("id, audio_url")
+                  .order("created_at", desc=False)
+                  .limit(total - FIRE_MAX_INCIDENTS)
+                  .execute()).data or []
+        for row in oldest:
+            if row.get("audio_url"):
+                delete_audio(row["audio_url"])
+            db.table(FIRE_INCIDENT_TABLE).delete().eq("id", row["id"]).execute()
+            print(f"[fire] Purged incident id={row['id']}", flush=True)
+    except Exception as e:
+        print(f"[fire] Purge error: {e}", flush=True)
+
+
+def fire_purge_old_log_rows():
+    try:
+        db    = get_db()
+        total = db.table(FIRE_LOG_TABLE).select("id", count="exact").execute().count or 0
+        if total <= FIRE_MAX_LOG_ROWS:
+            return
+        oldest = (db.table(FIRE_LOG_TABLE)
+                  .select("id")
+                  .order("created_at", desc=False)
+                  .limit(total - FIRE_MAX_LOG_ROWS)
+                  .execute()).data or []
+        for row in oldest:
+            db.table(FIRE_LOG_TABLE).delete().eq("id", row["id"]).execute()
+    except Exception as e:
+        print(f"[fire] Log purge error: {e}", flush=True)
+
+
+def fire_save_log_entry(transcript: str):
+    """Append EVERYTHING that was said to the flat radio log — chatter,
+    responding traffic, real calls, all of it — one row per audio chunk.
+    Intentionally decoupled from incident detection."""
+    try:
+        db  = get_db()
+        row = {
+            "text":     transcript,
+            "time_str": datetime.now(EASTERN).strftime("%I:%M %p"),
+        }
+        res   = db.table(FIRE_LOG_TABLE).insert(row).execute()
+        saved = res.data[0] if res.data else row
+        fire_broadcast("log", saved)
+        fire_purge_old_log_rows()
+    except Exception as e:
+        print(f"[fire] Log save error: {e}", flush=True)
+
+
+def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None, tone_dept: str | None = None):
+    try:
+        db  = get_db()
+        row = {
+            "incident_type": parsed.get("incident_type", "Unknown"),
+            "location":      parsed.get("location", "Unknown"),
+            "priority":      parsed.get("priority", "Unknown"),
+            "notes":         parsed.get("notes", ""),
+            "transcript":    transcript,
+            "time_str":      datetime.now(EASTERN).strftime("%I:%M %p"),
+            "audio_url":     audio_url,
+            "tone_dept":     tone_dept,
+        }
+        res   = db.table(FIRE_INCIDENT_TABLE).insert(row).execute()
+        saved = res.data[0] if res.data else row
+        fire_broadcast("incident", saved)
+        print(f"[fire] Saved + broadcasted: {row['incident_type']}", flush=True)
+        fire_purge_old_incidents()
+    except Exception as e:
+        print(f"[fire] Save error: {e}", flush=True)
+
+
+# ─── Two-Tone (Quick Call) detection — server-side port of the browser
+# decoder: short-window FFT, judge each slice by how "spiky" its peak is
+# vs. that same slice's own median magnitude (a real tone is a narrow
+# spike regardless of loudness), group consecutive spiky slices into
+# segments, prefer the first two qualifying segments as tone1/tone2 (fall
+# back to the last two if that pair doesn't match anything), and match
+# them against the known station tone-pair table below. ──────────────────
+FIRE_TONE_STATIONS = [
+    {"name": "East Amherst",     "f1": 2689, "f2": 674},
+    {"name": "Eggertsville",     "f1": 387,  "f2": 475},
+    {"name": "Getzville",        "f1": 346,  "f2": 526},
+    {"name": "Williamsville",    "f1": 475,  "f2": 796},
+    {"name": "Swormville",       "f1": 715,  "f2": 1084},
+    {"name": "Harris Hill",      "f1": 715,  "f2": 526},
+    {"name": "Newstead",         "f1": 2689, "f2": 1342},
+    {"name": "Clarence Center",  "f1": 2689, "f2": 797},
+    {"name": "Clarence",         "f1": 2689, "f2": 873},
+    {"name": "Akron",            "f1": 2689, "f2": 1231},
+    {"name": "Snyder",           "f1": 461,  "f2": 580},
+    {"name": "Main Transit",     "f1": 1084, "f2": 475},
+    {"name": "Ellicott Creek",   "f1": 2689, "f2": 1130},
+    {"name": "Rapids Fire",      "f1": 2689, "f2": 949},
+    {"name": "North Bailey",     "f1": 2690, "f2": 732},
+    {"name": "North Amherst",    "f1": 2689, "f2": 1465},
+]
+TONE_FREQ_MIN, TONE_FREQ_MAX = 250, 3200
+TONE_SHARPNESS_THRESH = 7.0
+TONE_MIN_DURATION_SEC = 0.45
+TONE_MATCH_TOLERANCE  = 0.03
+
+
+def _tone_decode_pcm(audio_bytes: bytes, sr: int = 8000):
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+        f.write(audio_bytes)
+        in_path = f.name
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", in_path,
+             "-ac", "1", "-ar", str(sr), "-f", "s16le", "-"],
+            capture_output=True, timeout=30
+        )
+        if result.returncode != 0 or not result.stdout:
+            return None
+        return np.frombuffer(result.stdout, dtype="<i2").astype(np.float32) / 32768.0
+    except Exception as e:
+        print(f"[tone] pcm decode failed: {e}", flush=True)
+        return None
+    finally:
+        os.unlink(in_path)
+
+
+def _tone_track(pcm, sr):
+    n_time = max(64, int(sr * 0.046))
+    n_fft = 1
+    while n_fft < n_time * 4:
+        n_fft <<= 1
+    hop = max(16, int(sr * 0.0116))
+    window = np.hanning(n_time)
+    freqs = np.fft.rfftfreq(n_fft, d=1.0 / sr)
+    lo, hi = np.searchsorted(freqs, TONE_FREQ_MIN), np.searchsorted(freqs, TONE_FREQ_MAX)
+
+    track = []
+    for start in range(0, len(pcm) - n_time, hop):
+        full_spec = np.abs(np.fft.rfft(pcm[start:start + n_time] * window, n=n_fft))
+        if full_spec.size <= 1:
+            continue
+        # Find the TRUE peak across the whole spectrum first (not just the
+        # 250Hz-3.2kHz band). Restricting the search to the band would just
+        # clamp an out-of-band peak to the nearest in-band bin edge instead
+        # of excluding it, which is what would let sub-250Hz tones sneak
+        # back in pinned to the band floor. Only a peak that's genuinely
+        # inside the band counts.
+        peak_idx_global = int(np.argmax(full_spec[1:])) + 1  # skip DC bin
+        band = full_spec[lo:hi]
+        if band.size == 0:
+            continue
+        median = np.median(band) or 1e-9
+        in_band = lo <= peak_idx_global < hi
+        peakiness = (full_spec[peak_idx_global] / median) if in_band else 0.0
+        track.append({"t": start / sr, "freq": freqs[peak_idx_global], "peakiness": peakiness})
+    return track
+
+
+def _group_tone_segments(track):
+    segs, cur, gap = [], None, 0
+
+    def close(seg):
+        fs = [p["freq"] for p in seg["points"]]
+        segs.append({"start": seg["start"], "end": seg["points"][-1]["t"],
+                     "duration": seg["points"][-1]["t"] - seg["start"], "freq": sum(fs) / len(fs)})
+
+    for pt in track:
+        if pt["peakiness"] >= TONE_SHARPNESS_THRESH:
+            if cur and abs(pt["freq"] - cur["avg"]) / cur["avg"] <= 0.03:
+                cur["points"].append(pt)
+                cur["avg"] = sum(p["freq"] for p in cur["points"]) / len(cur["points"])
+                gap = 0
+            else:
+                if cur: close(cur)
+                cur, gap = {"start": pt["t"], "avg": pt["freq"], "points": [pt]}, 0
+        elif cur:
+            gap += 1
+            if gap > 3:
+                close(cur); cur, gap = None, 0
+    if cur:
+        close(cur)
+    return [s for s in segs if s["duration"] >= TONE_MIN_DURATION_SEC]
+
+
+def detect_two_tone_department(audio_bytes: bytes) -> str | None:
+    """Returns the matched station NAME(s) if tone-segment pair(s) from the
+    clip match known department tone pairs within tolerance, else None.
+
+    Normally prefers the first two qualifying tone segments; if that pair
+    doesn't match any station, falls back to the last two segments before
+    giving up.
+
+    A single department's pair plays twice in a row (4 segments:
+    T1,T2,T1,T2). Two departments dispatched together interleave instead —
+    both pairs play once in turn, then the whole sequence repeats:
+    [D1-T1, D1-T2, D2-T1, D2-T2, D1-T1, D1-T2, D2-T1, D2-T2] — 8 segments.
+    Only treat a clip as two-department when segment count lands right
+    around 8 (9 allowed too, in case one spurious extra segment got picked
+    up) — any other count falls through to the normal single-pair path so
+    stray noise doesn't get misread as a second department. When both
+    departments are found, they're joined "Dept A, Dept B" for storage."""
+    try:
+        sr = 8000
+        pcm = _tone_decode_pcm(audio_bytes, sr)
+        if pcm is None or len(pcm) < sr * 0.5:
+            return None
+        segs = _group_tone_segments(_tone_track(pcm, sr))
+        if len(segs) < 2:
+            return None
+
+        def match_pair(f1, f2):
+            for st in FIRE_TONE_STATIONS:
+                if (abs(f1 - st["f1"]) / st["f1"] <= TONE_MATCH_TOLERANCE and
+                    abs(f2 - st["f2"]) / st["f2"] <= TONE_MATCH_TOLERANCE):
+                    return st["name"]
+            return None
+
+        if 8 <= len(segs) <= 9:
+            d1 = (match_pair(segs[0]["freq"], segs[1]["freq"]) or
+                  match_pair(segs[4]["freq"], segs[5]["freq"]))
+            d2 = (match_pair(segs[2]["freq"], segs[3]["freq"]) or
+                  match_pair(segs[6]["freq"], segs[7]["freq"]))
+            depts = [d for d in (d1, d2) if d]
+            if depts:
+                return ", ".join(depts)
+            # neither department matched — fall through to single-pair logic
+
+        # Prefer the first two qualifying segments in the clip.
+        matched = match_pair(segs[0]["freq"], segs[1]["freq"])
+        if matched:
+            return matched
+
+        # No detection off the first pair — fall back to the last two.
+        return match_pair(segs[-2]["freq"], segs[-1]["freq"])
+    except Exception as e:
+        print(f"[tone] detection error: {e}", flush=True)
+        return None
+
+
+def fire_process_audio_chunk(audio: bytes):
+    try:
+        print("[fire] Trimming silence...", flush=True)
+        trimmed = trim_silence(audio)
+        if not trimmed:
+            print("[fire] Pure silence, skipping.", flush=True)
+            return
+
+        raw_dur = get_duration(audio)
+        trimmed_dur = get_duration(trimmed)
+        print(f"[fire] trim result: {raw_dur:.1f}s raw -> {trimmed_dur:.1f}s trimmed", flush=True)
+
+        # Tone detection and transcription are independent of each other —
+        # run them concurrently instead of sequentially to save time.
+        tone_future = _fire_concurrency_pool.submit(detect_two_tone_department, trimmed)
+        transcript_future = _fire_concurrency_pool.submit(fire_transcribe, trimmed)
+
+        tone_dept = tone_future.result()
+        if tone_dept:
+            print(f"[fire] two-tone match: {tone_dept}", flush=True)
+
+        transcript = transcript_future.result()
+        print(f"[fire] Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
+
+        if len(transcript.strip()) < 10:
+            print("[fire] Too short, skipping entirely (not even logged).", flush=True)
+            return
+
+        # Log EVERYTHING first, unconditionally — chatter, responding
+        # traffic, real dispatch calls. Powers the flat radio log tab.
+        fire_save_log_entry(transcript)
+
+        # Fresh-calls-only gate #1: is this just a repeat of a call that
+        # was already read out in the last few minutes?
+        if fire_is_duplicate_call(transcript):
+            print("[fire] repeat transmission of a recent call — logged, no new incident card", flush=True)
+            return
+
+        # A confirmed two-tone match is strong independent evidence this is
+        # a real dispatch — never let gates #2-#4 (parse/address/classification
+        # quality checks) drop a call when tone detection already confirmed it.
+        tone_confirmed = bool(tone_dept)
+
+        # Fresh-calls-only gate #2: LLM filters out pure "responding" /
+        # acknowledgment chatter and anything that isn't a real new call.
+        print("[fire] Parsing...", flush=True)
+        parsed = fire_parse_transcript(transcript)
+        if not parsed:
+            if tone_confirmed:
+                print("[fire] parser returned null but tone-confirmed — saving with defaults.", flush=True)
+                parsed = {"incident_type": "Unknown", "location": "Unknown", "priority": "Unknown", "notes": ""}
+            else:
+                print("[fire] Not a new dispatch call (chatter/responding) — logged only.", flush=True)
+                return
+
+        # Fresh-calls-only gate #3: no valid "number + street" address in
+        # the parsed location — don't save an incident row at all. It's
+        # already in the flat radio log above; it just never becomes an
+        # incident card. Skipped entirely when tone-confirmed.
+        if not tone_confirmed and not fire_is_valid_address(parsed.get("location")):
+            print(f"[fire] no valid address ({parsed.get('location')!r}) — not saving incident.", flush=True)
+            return
+
+        # Fresh-calls-only gate #4: both incident_type AND priority came
+        # back "Unknown" — the parser couldn't classify the call at all,
+        # so it's not worth saving as an incident card. Skipped entirely
+        # when tone-confirmed.
+        incident_type = (parsed.get("incident_type") or "").strip().lower()
+        priority = (parsed.get("priority") or "").strip().lower()
+        if not tone_confirmed and incident_type == "unknown" and priority == "unknown":
+            print(f"[fire] both type and priority unknown — not saving incident.", flush=True)
+            return
+
+        fire_remember_call(transcript)
+
+        # Only now, once we know it's a genuine new call WITH a valid
+        # address, keep the audio.
+        print("[fire] Uploading audio for confirmed new incident...", flush=True)
+        audio_url = fire_upload_audio(trimmed)
+        fire_save_incident(parsed, transcript, audio_url, tone_dept)
+
+    except Exception as e:
+        import traceback
+        print(f"[fire] Processing error: {e}", flush=True)
+        traceback.print_exc()
+
+
+# ─────────────────────────────────────────────
+# Start the capture thread, then the server
+# ─────────────────────────────────────────────
+
+fire_thread = threading.Thread(target=fire_scanner_loop, daemon=True)
+fire_thread.start()
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, threaded=True)
