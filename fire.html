@@ -449,6 +449,24 @@ const STREAM_API = 'https://dispatch-cad.onrender.com/fire/stream';
 // ── State ──────────────────────────────────────────────────────────────────
 let knownIds     = new Set();
 let knownLogIds  = new Set();
+let logEntryMap = {};
+let logScrollToken = 0;
+
+function findLogEntryIdForIncident(inc) {
+  const target = (inc.transcript || '').trim();
+  if (!target) return null;
+  for (const id in logEntryMap) {
+    if ((logEntryMap[id].text || '').trim() === target) return id;
+  }
+  return null;
+}
+
+async function ensureLogEntryLoaded(inc, token) {
+  while (!logAllLoaded && !findLogEntryIdForIncident(inc)) {
+    if (token !== logScrollToken) return; // a newer click superseded this one
+    await fetchLog(logOffset);
+  }
+}
 let allIncidents = [];
 let incidentMap  = {};
 let currentOffset = 0;
@@ -887,7 +905,7 @@ const DEPARTMENT_LIST = [
   { label: "Snyder FD",         aliases: ["Snyder"] },
   { label: "Main Transit FD",   aliases: ["Main Transit"] },
   { label: "Ellicott Creek FD", aliases: ["Ellicott Creek"] },
-  { label: "Rapids Fire FD", aliases: ["Rapids Fire", "Rapid Fire", "Rapid", "Rapids"], excludeAfter: ["Road", "Rd"] },
+  { label: "Rapids Fire FD", aliases: ["Rapids Fire", "Rapid Fire", "Rapid", "Rapids"], excludeAfter: ["Road","heart","rate", "Rd"] },
   { label: "North Amherst FD",  aliases: ["North Amherst"] },
   { label: "North Bailey FD",   aliases: ["North Bailey", "Bailey"], excludeAfter: ["Avenue", "Ave","quality"] },
 ];
@@ -956,6 +974,25 @@ function getStationLabel(inc) {
     return toneDept === transcriptDept ? toneDept : 'NA';
   }
   return toneDept || transcriptDept || 'NA';
+}
+
+// Multi-department support: if inc.tone_dept contains a comma, that's a
+// manual mutual-aid entry — trust it literally, split on comma, resolve
+// each piece to a known department name via findDepartmentInText, and skip
+// the transcript cross-check entirely (no toneDept === transcriptDept
+// comparison, no 'NA' collapse). Returns an array so callers can credit
+// the incident to multiple departments at once instead of picking one.
+// Falls back to the existing single-department getStationLabel() logic
+// (wrapped in a 1-element array) when there's no comma.
+function getStationLabels(inc) {
+  if (inc.tone_dept && inc.tone_dept.includes(',')) {
+    const parts = inc.tone_dept
+      .split(',')
+      .map(p => findDepartmentInText(p))
+      .filter(Boolean);
+    if (parts.length > 0) return [...new Set(parts)];
+  }
+  return [getStationLabel(inc)];
 }
 
 function splitRepeatedPhrases(text) {
@@ -1070,9 +1107,10 @@ function updateMostCallsToday() {
   const tally = {};
   allIncidents.forEach(inc => {
     if (!isToday(inc)) return;
-    const dept = getStationLabel(inc);
-    if (dept === 'NA') return;
-    tally[dept] = (tally[dept] || 0) + 1;
+    getStationLabels(inc).forEach(dept => {
+      if (dept === 'NA') return;
+      tally[dept] = (tally[dept] || 0) + 1;
+    });
   });
 
   const entries = Object.entries(tally);
@@ -1148,7 +1186,7 @@ function makeIncidentId(inc) {
 // ── Render incident row ────────────────────────────────────────────────────
 function renderRow(inc) {
   const pc = pClass(inc.priority);
-  const station = `<span class="unit-chip">${escHtml(getStationLabel(inc))}</span>`;
+  const station = getStationLabels(inc).map(d => `<span class="unit-chip">${escHtml(d)}</span>`).join('');
     const priLabel = {fire:'FIRE',ems:'EMS',unknown:'UNKNOWN'}[pc]||inc.priority;
   const audioBadge = inc.audio_url
     ? `<span class="audio-badge"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>Audio</span>`
@@ -1168,7 +1206,7 @@ function renderRow(inc) {
 function renderLogEntry(entry) {
   const lines = splitTranscript(formatText(entry.text || ''));
   const tMs = entry.created_at ? new Date(entry.created_at).getTime() : '';
-  return lines.slice().reverse().map(l => `<div class="tx-line-row" data-time-ms="${tMs}">
+  return lines.slice().reverse().map(l => `<div class="tx-line-row" data-time-ms="${tMs}" data-entry-id="${escHtml(String(entry.id))}">
       <span class="tx-line-time">${escHtml(entry.time_str||'')}</span>
       <span class="tx-line-text">${escHtml(l)}</span>
     </div>`).join('');
@@ -1362,7 +1400,7 @@ function openModal(id) {
   const createdFull = inc.created_at
     ? new Date(inc.created_at).toLocaleString('en-US',{timeZone:'America/New_York',hour12:false})
     : '—';
-  const stationChip = `<span class="m-chip">${escHtml(getStationLabel(inc))}</span>`;
+    const stationChip = getStationLabels(inc).map(d => `<span class="m-chip">${escHtml(d)}</span>`).join('');
   const loc = normalizeLocationText(inc.location) || 'Unknown';
   const locIsKnown = loc !== 'Unknown' && loc !== 'Unknown Location' && loc.length > 3;
   const locCell = locIsKnown
@@ -1414,16 +1452,27 @@ function openModal(id) {
   document.getElementById('modal-overlay').classList.add('open');
 }
 
-function goToRadioLog(id) {
+async function goToRadioLog(id) {
   const inc = incidentMap[id];
   if (!inc) return;
   closeModalDirect();
 
+  const token = ++logScrollToken;
+  if (window.innerWidth <= 580) mobTab('side');
+
+  await ensureLogEntryLoaded(inc, token);
+  if (token !== logScrollToken) return; // a newer click happened while we were paging in data
+
+  const doScroll = () => {
+    const entryId = findLogEntryIdForIncident(inc);
+    const matched = entryId ? scrollToLogEntryById(entryId) : false;
+    if (!matched) scrollToLogEntry(inc); // fallback: closest-by-time, old behavior
+  };
+
   if (window.innerWidth <= 580) {
-    mobTab('side');
-    setTimeout(() => scrollToLogEntry(inc), 320);
+    setTimeout(doScroll, 320);
   } else {
-    scrollToLogEntry(inc);
+    doScroll();
   }
 }
 
@@ -1446,6 +1495,18 @@ function scrollToLogEntry(inc) {
   closest.scrollIntoView({ behavior: 'smooth', block: 'center' });
   closest.classList.add('tx-line-highlight');
   setTimeout(() => closest.classList.remove('tx-line-highlight'), 1800);
+}
+
+function scrollToLogEntryById(entryId) {
+  const tfeed = document.getElementById('transcript-feed');
+  if (!tfeed) return false;
+  const rows = Array.from(tfeed.querySelectorAll(`.tx-line-row[data-entry-id="${CSS.escape(entryId)}"]`));
+  if (rows.length === 0) return false;
+
+  rows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  rows.forEach(r => r.classList.add('tx-line-highlight'));
+  setTimeout(() => rows.forEach(r => r.classList.remove('tx-line-highlight')), 1800);
+  return true;
 }
 
 function closeModal(e) { if (e.target === document.getElementById('modal-overlay')) closeModalDirect(); }
@@ -1578,17 +1639,19 @@ function computeDeptTally(range) {
   if (range === 'today') {
     allIncidents.forEach(inc => {
       if (!isToday(inc)) return;
-      const dept = getStationLabel(inc);
-      if (dept === 'NA') return;
-      tally[dept] = (tally[dept] || 0) + 1;
+      getStationLabels(inc).forEach(dept => {
+        if (dept === 'NA') return;
+        tally[dept] = (tally[dept] || 0) + 1;
+      });
     });
   } else {
     const cutoff = Date.now() - (DEPT_RANGE_MS[range] || DEPT_RANGE_MS['24h']);
     allIncidents.forEach(inc => {
       if (getIncidentTimeMs(inc) < cutoff) return;
-      const dept = getStationLabel(inc);
-      if (dept === 'NA') return;
-      tally[dept] = (tally[dept] || 0) + 1;
+      getStationLabels(inc).forEach(dept => {
+        if (dept === 'NA') return;
+        tally[dept] = (tally[dept] || 0) + 1;
+      });
     });
   }
   return Object.entries(tally).sort((a, b) => b[1] - a[1]);
@@ -1752,7 +1815,7 @@ function lsRenderRankedList(entries, max) {
 }
 
 function renderLsResults(label) {
-  const calls = allIncidents.filter(inc => getStationLabel(inc) === label);
+  const calls = allIncidents.filter(inc => getStationLabels(inc).includes(label));
 
   document.getElementById('deptstats-title').textContent = label;
   document.getElementById('deptstats-sub').textContent = `${calls.length} call${calls.length === 1 ? '' : 's'} on record`;
@@ -1839,10 +1902,11 @@ sseStream.onmessage = (event) => {
     return;
   }
 
-  if (msg.kind === 'log') {
+    if (msg.kind === 'log') {
   const entry = msg.data;
   if (knownLogIds.has(String(entry.id))) return;
   knownLogIds.add(String(entry.id));
+  logEntryMap[String(entry.id)] = entry;
   prependLogEntry(entry);
 }
 };
@@ -1908,7 +1972,7 @@ async function fetchLog(offset = 0) {
     const newOnes = entries.filter(e => !knownLogIds.has(String(e.id)));
     if (newOnes.length === 0 || entries.length === 0) { logAllLoaded = true; isLogLoading = false; return; }
 
-    newOnes.forEach(e => knownLogIds.add(String(e.id)));
+        newOnes.forEach(e => { knownLogIds.add(String(e.id)); logEntryMap[String(e.id)] = e; });
 appendLogEntries(newOnes);
 
     if (entries.length < 50) logAllLoaded = true;
