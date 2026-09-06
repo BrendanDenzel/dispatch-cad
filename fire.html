@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Amherst Fire Control — CAD</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- MapLibre CSS now injected dynamically on first map open, see loadCSS() -->
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{
@@ -115,6 +116,62 @@ audio{display:none;}
 .toast.fire .toast-dot{background:var(--red-bright);}.toast.ems .toast-dot{background:var(--amber-bright);}
 .toast-type{font-size:12px;font-weight:600;color:#fff;}
 .toast-loc{font-family:var(--mono);font-size:10px;color:var(--text2);}
+
+/* ── Map tab/button + dark map ─────────────────────────────────────── */
+.map-pill-btn{display:inline-flex;align-items:center;gap:6px;margin-left:10px;margin-right:4px;padding:6px 16px;border-radius:999px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:all .15s;flex-shrink:0;}
+.map-pill-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.8;}
+.map-pill-btn:hover{border-color:var(--blue);color:var(--blue-bright);}
+.map-pill-btn.clicked{background:var(--blue);border-color:var(--blue);color:#fff;}
+
+.map-view{display:none;flex:1;min-width:0;height:100%;}
+.map-view.active{display:flex;}
+#map-canvas{width:100%;height:100%;background:#0c0e12;}
+.maplibregl-ctrl-attrib{background:rgba(19,22,28,.85)!important;color:var(--text3)!important;font-size:9px!important;}
+.maplibregl-ctrl-attrib a{color:var(--text2)!important;}
+.maplibregl-ctrl-group{background:var(--panel2)!important;border:1px solid var(--border2)!important;}
+.maplibregl-ctrl-group button{background:var(--panel2)!important;}
+.maplibregl-ctrl-group button:hover{background:var(--panel3)!important;}
+.maplibregl-ctrl-group button span{filter:invert(1) brightness(1.6);}
+
+/* Custom collapsible attribution control */
+.custom-attrib{
+  background:rgba(19,22,28,.85);
+  border-radius:999px;
+  color:var(--text2);
+  font-size:11px;
+  display:flex;
+  align-items:center;
+  overflow:hidden;
+  transition:max-width .2s ease, padding .2s ease;
+  max-width:26px;
+  height:26px;
+  cursor:pointer;
+}
+.custom-attrib.open{
+  max-width:320px;
+  padding:0 10px 0 4px;
+}
+.custom-attrib-icon{
+  width:26px;height:26px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:50%;
+  background:transparent;
+  font-family:var(--sans);
+  font-style:italic;font-weight:600;font-size:12px;
+  color:var(--text2);
+}
+.custom-attrib-text{
+  white-space:nowrap;
+  padding-left:2px;
+}
+.custom-attrib-text a{color:var(--text2);text-decoration:none;transition:color .15s;}
+.custom-attrib-text a:hover{color:var(--blue-bright);text-decoration:underline;}
+
+@media(max-width:580px){
+  .map-pill-btn{display:none;}
+  .map-view{display:none;}
+  .map-view.mob-show{display:flex;}
+}
 
 /* Desktop segmented toggle — sits in the topbar, right of the clock */
 .svc-toggle{display:flex;align-items:center;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;overflow:hidden;margin-left:14px;flex-shrink:0;}
@@ -335,6 +392,10 @@ audio{display:none;}
   <a href="index.html" class="police">Police</a>
   <a href="fire.html" class="fire active">Fire</a>
 </div>
+<button class="map-pill-btn" id="map-pill-btn" onclick="toggleMapView()">
+  <svg id="map-pill-icon" viewBox="0 0 24 24"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+  <span id="map-pill-label">Map</span>
+</button>
 </div>
 </div>
 
@@ -356,6 +417,7 @@ audio{display:none;}
 </div>
 
 <div class="workspace" id="workspace">
+  <div class="map-view" id="view-map"><div id="map-canvas"></div></div>
   <div class="feed-col" id="view-feed">
     <div class="col-hdr"><span class="col-hdr-title">Active Calls</span><span class="col-hdr-count" id="incident-count">0 calls</span></div>
     <div class="ptr-wrap" id="ptr-wrap"><div class="ptr-spinner" id="ptr-spinner"></div></div>
@@ -379,6 +441,10 @@ audio{display:none;}
     <button class="mnb" id="mnb-rad" onclick="mobTab('side')">
       <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
       <span class="mnb-lbl">Radio</span>
+    </button>
+    <button class="mnb" id="mnb-map" onclick="mobTab('map')">
+      <svg viewBox="0 0 24 24"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+      <span class="mnb-lbl">Map</span>
     </button>
   </div>
 </div>
@@ -437,7 +503,7 @@ audio{display:none;}
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<!-- HLS.js and MapLibre GL JS are now lazy-loaded on demand, see loadScript()/loadCSS() below -->
 <script>
 // ── Point this at wherever fire_server.py is deployed (a separate service
 // from the police dispatch-cad backend). ─────────────────────────────────
@@ -445,6 +511,30 @@ const API = 'https://fire-cad.onrender.com/fire/incidents';
 const LOG_API = 'https://fire-cad.onrender.com/fire/radio-log';
 const STATS_API = 'https://fire-cad.onrender.com/fire/stats';
 const STREAM_API = 'https://fire-cad.onrender.com/fire/stream';
+
+// ── Lazy-load helpers ─────────────────────────────────────────────────
+const _loadedScripts = {};
+function loadScript(src) {
+  if (_loadedScripts[src]) return _loadedScripts[src];
+  _loadedScripts[src] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.body.appendChild(s);
+  });
+  return _loadedScripts[src];
+}
+
+const _loadedCSS = {};
+function loadCSS(href) {
+  if (_loadedCSS[href]) return;
+  _loadedCSS[href] = true;
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = href;
+  document.head.appendChild(l);
+}
 
 // ── State ──────────────────────────────────────────────────────────────────
 let knownIds     = new Set();
@@ -1053,8 +1143,12 @@ setInterval(updateClock, 1000); updateClock();
 const STREAM_HLS_URL = "https://hls-o1.broadcastify.com/s1/feed/1775/playlist.m3u8";
 let hlsInstance = null;
 
-function initScannerAudio() {
+async function initScannerAudio() {
   const audio = document.getElementById('scanner-audio');
+
+  if (!window.Hls) {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js');
+  }
 
   if (window.Hls && Hls.isSupported()) {
     hlsInstance = new Hls({
@@ -1070,13 +1164,13 @@ function initScannerAudio() {
   }
 }
 
-function toggleAudio() {
+async function toggleAudio() {
   const a = document.getElementById('scanner-audio');
   const btn = document.getElementById('sb-btn');
   const viz = document.getElementById('sb-viz');
   const oa  = document.getElementById('sb-onair');
 
-  if (!hlsInstance && !a.src) initScannerAudio();
+  if (!hlsInstance && !a.src) await initScannerAudio();
 
   if (a.paused) {
     a.play().catch(()=>{});
@@ -1093,13 +1187,156 @@ function toggleAudio() {
 function mobTab(tab) {
   const feed = document.getElementById('view-feed');
   const side = document.getElementById('view-side');
-  const bi = document.getElementById('mnb-inc'), br = document.getElementById('mnb-rad');
+  const mapView = document.getElementById('view-map');
+  const bi = document.getElementById('mnb-inc'), br = document.getElementById('mnb-rad'), bm = document.getElementById('mnb-map');
+
+  feed.style.display = 'none';
+  side.classList.remove('mob-show');
+  mapView.classList.remove('mob-show');
+  bi.classList.remove('active'); br.classList.remove('active'); bm.classList.remove('active');
+
   if (tab === 'feed') {
-    feed.style.display='flex'; side.classList.remove('mob-show');
-    bi.classList.add('active'); br.classList.remove('active');
+    feed.style.display = 'flex';
+    bi.classList.add('active');
+  } else if (tab === 'side') {
+    side.classList.add('mob-show');
+    br.classList.add('active');
+  } else if (tab === 'map') {
+    mapView.classList.add('mob-show');
+    bm.classList.add('active');
+    initGlMap().then(() => { if (glMap) setTimeout(() => glMap.resize(), 50); });
+  }
+}
+
+// ── Dark Mode Map (MapLibre GL + Protomaps) ────────────────────────────
+// Protomaps hosted API key
+const PROTOMAPS_API_KEY = 'e0590e11b7479b37';
+
+let glMap = null;
+let mapViewActive = false;
+
+function loadFireDistricts() {
+  fetch('fire-districts.geojson')
+    .then(r => r.json())
+    .then(data => {
+      if (glMap.getSource('fire-districts')) return;
+      glMap.addSource('fire-districts', { type: 'geojson', data });
+
+      // Add new department names/colors here as districts are added.
+      const DISTRICT_COLOR_EXPR = [
+        'match', ['get', 'name'],
+        'Swormville Fire Protection District',        '#e74c3c',
+        'North Amherst Fire Protection District',      '#3498db',
+        'Getzville Fire Protection District',           '#2ecc71',
+        'Ellicott Creek Fire Protection District',      '#9b59b6',
+        'East Amherst Fire Protection District',        '#f39c12',
+        'North Bailey Fire Protection District',        '#1abc9c',
+        'Snyder Fire District',                         '#e67e22',
+        'Eggertsville Fire District',                   '#3f51b5',
+        'Main-Transit Fire Protection District',        '#00bcd4',
+        'Williamsville Fire Protection District',       '#ff5722',
+        /* default fallback */ '#888888'
+      ];
+
+      glMap.addLayer({
+        id: 'district-fill',
+        type: 'fill',
+        source: 'fire-districts',
+        paint: { 'fill-color': DISTRICT_COLOR_EXPR, 'fill-opacity': 0.18 }
+      });
+      glMap.addLayer({
+        id: 'district-line',
+        type: 'line',
+        source: 'fire-districts',
+        paint: { 'line-color': DISTRICT_COLOR_EXPR, 'line-width': 1.5 }
+      });
+      glMap.addLayer({
+        id: 'district-label',
+        type: 'symbol',
+        source: 'fire-districts',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-size': 12,
+          'text-font': ['Noto Sans Regular']
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': '#000000',
+          'text-halo-width': 1.2
+        }
+      });
+    })
+    .catch(err => console.error('Failed to load fire districts', err));
+}
+
+class CustomAttributionControl {
+  onAdd(map) {
+    this._map = map;
+    this._container = document.createElement('div');
+    this._container.className = 'maplibregl-ctrl custom-attrib';
+    this._container.innerHTML = `
+      <div class="custom-attrib-icon">i</div>
+      <div class="custom-attrib-text"><a href="https://maplibre.org/" target="_blank" rel="noopener">MapLibre</a> | <a href="https://github.com/protomaps/basemaps" target="_blank" rel="noopener">Protomaps</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></div>
+    `;
+    this._container.addEventListener('click', () => {
+      this._container.classList.toggle('open');
+    });
+    return this._container;
+  }
+  onRemove() {
+    this._container.parentNode.removeChild(this._container);
+    this._map = undefined;
+  }
+}
+
+async function initGlMap() {
+  if (glMap) return;
+  loadCSS('https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css');
+  await loadScript('https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js');
+  if (glMap) return; // guard against a second call finishing the await first
+
+  glMap = new maplibregl.Map({
+    container: 'map-canvas',
+    style: `https://api.protomaps.com/styles/v5/dark/en.json?key=${PROTOMAPS_API_KEY}`,
+    center: [-78.7998, 42.9784], // Amherst, NY (lng, lat)
+    zoom: 13,
+    attributionControl: false,
+  });
+  glMap.addControl(new maplibregl.NavigationControl(), 'top-right');
+  glMap.addControl(new CustomAttributionControl(), 'bottom-right');
+  glMap.on('load', loadFireDistricts);
+}
+
+const MAP_ICON_SVG  = '<path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>';
+const BACK_ICON_SVG = '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>';
+
+function toggleMapView() {
+  const btn = document.getElementById('map-pill-btn');
+  const icon = document.getElementById('map-pill-icon');
+  const label = document.getElementById('map-pill-label');
+  const feedCol = document.getElementById('view-feed');
+  const side = document.getElementById('view-side');
+  const mapView = document.getElementById('view-map');
+
+  // Brief press-feedback flash on every click, regardless of resulting state.
+  btn.classList.add('clicked');
+  setTimeout(() => btn.classList.remove('clicked'), 180);
+
+  mapViewActive = !mapViewActive;
+
+  if (mapViewActive) {
+    icon.innerHTML = BACK_ICON_SVG;
+    label.textContent = 'Go Back';
+    feedCol.style.display = 'none';
+    side.style.display = 'none';
+    mapView.classList.add('active');
+    initGlMap().then(() => { if (glMap) setTimeout(() => glMap.resize(), 50); });
   } else {
-    feed.style.display='none'; side.classList.add('mob-show');
-    br.classList.add('active'); bi.classList.remove('active');
+    icon.innerHTML = MAP_ICON_SVG;
+    label.textContent = 'Map';
+    feedCol.style.display = 'flex';
+    side.style.display = 'flex';
+    mapView.classList.remove('active');
   }
 }
 
