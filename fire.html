@@ -415,9 +415,9 @@ audio{display:none;}
     </div>
     <div class="dept-filter-row" id="dept-filter-row">
       <button class="dept-filter-btn" data-range="today" onclick="setDeptRange('today')">Today</button>
-      <button class="dept-filter-btn" data-range="24h" onclick="setDeptRange('24h')">24 Hours</button>
       <button class="dept-filter-btn" data-range="3d" onclick="setDeptRange('3d')">3 Days</button>
       <button class="dept-filter-btn" data-range="7d" onclick="setDeptRange('7d')">7 Days</button>
+      <button class="dept-filter-btn" data-range="all" onclick="setDeptRange('all')">All Time</button>
     </div>
     <div class="dept-list-wrap" id="dept-list-wrap"></div>
   </div>
@@ -1539,11 +1539,12 @@ let deptLoadToken = 0; // guards against a stale fetch loop finishing after a ne
 // the actual filtering below still uses the exact isToday() calendar check.
 const DEPT_RANGE_MS = {
   'today': 30 * 60 * 60 * 1000,
-  '24h':   24 * 60 * 60 * 1000,
   '3d':    3 * 24 * 60 * 60 * 1000,
   '7d':    7 * 24 * 60 * 60 * 1000,
+  // 'all' intentionally has no entry — it has no cutoff, it just means
+  // "load everything the backend has".
 };
-const DEPT_RANGE_LABEL = { 'today': 'Today', '24h': 'Last 24 Hours', '3d': 'Last 3 Days', '7d': 'Last 7 Days' };
+const DEPT_RANGE_LABEL = { 'today': 'Today', '3d': 'Last 3 Days', '7d': 'Last 7 Days', 'all': 'All Time' };
 
 // Oldest incident currently sitting in memory (allIncidents is newest-first,
 // pages appended in order, so the oldest loaded item is the last element).
@@ -1557,6 +1558,16 @@ function oldestLoadedTimeMs() {
 //  - allLoaded is true (backend has no more history left), or
 //  - a newer range selection superseded this one (via deptLoadToken)
 async function ensureDeptDataLoaded(range, token) {
+  if (range === 'all') {
+    // No cutoff to satisfy — keep paging until the backend has nothing
+    // older left to give.
+    while (!allLoaded) {
+      if (token !== deptLoadToken) return; // a different range was picked meanwhile — abandon this loop
+      await fetchIncidents(currentOffset);
+      if (token === deptLoadToken) renderDeptLoading();
+    }
+    return;
+  }
   const cutoff = Date.now() - (DEPT_RANGE_MS[range] || DEPT_RANGE_MS['today']);
   while (!allLoaded && oldestLoadedTimeMs() > cutoff) {
     if (token !== deptLoadToken) return; // a different range was picked meanwhile — abandon this loop
@@ -1644,8 +1655,15 @@ function computeDeptTally(range) {
         tally[dept] = (tally[dept] || 0) + 1;
       });
     });
+  } else if (range === 'all') {
+    allIncidents.forEach(inc => {
+      getStationLabels(inc).forEach(dept => {
+        if (dept === 'NA') return;
+        tally[dept] = (tally[dept] || 0) + 1;
+      });
+    });
   } else {
-    const cutoff = Date.now() - (DEPT_RANGE_MS[range] || DEPT_RANGE_MS['24h']);
+    const cutoff = Date.now() - (DEPT_RANGE_MS[range] || DEPT_RANGE_MS['7d']);
     allIncidents.forEach(inc => {
       if (getIncidentTimeMs(inc) < cutoff) return;
       getStationLabels(inc).forEach(dept => {
@@ -1660,6 +1678,8 @@ function computeDeptTally(range) {
 function renderDeptLoading() {
   const loaded = allIncidents.length;
   const total = allTimeTotal || loaded;
+  document.getElementById('dept-modal-sub').innerHTML =
+    `Ranked by total calls · ${escHtml(DEPT_RANGE_LABEL[deptCurrentRange] || '')} · —— dept identified calls`;
   document.getElementById('dept-list-wrap').innerHTML =
     `<div class="dept-loading-row"><div class="dept-loading-spin"></div>Loading call history…</div>
      <div class="dept-loading-progress">${loaded} of ${total} calls loaded</div>`;
@@ -1669,7 +1689,15 @@ function renderDeptList(range) {
   const entries = computeDeptTally(range);
   const wrap = document.getElementById('dept-list-wrap');
   const sub  = document.getElementById('dept-modal-sub');
-  sub.textContent = `Ranked by total calls · ${DEPT_RANGE_LABEL[range] || ''}`;
+  const totalCalls = entries.reduce((sum, [, count]) => sum + count, 0);
+
+  let subHtml = `Ranked by total calls · ${escHtml(DEPT_RANGE_LABEL[range] || '')} · ${totalCalls} dept identified calls`;
+  if (range === 'all' && allIncidents.length > 0) {
+    const oldestMs = oldestLoadedTimeMs();
+    const days = Math.max(1, Math.ceil((Date.now() - oldestMs) / (24 * 60 * 60 * 1000)));
+    subHtml += `<br>Spanning ${days} day${days === 1 ? '' : 's'} of records`;
+  }
+  sub.innerHTML = subHtml;
 
   // computeDeptTally always seeds every known department at 0, so this list
   // is never actually empty — departments with 0 calls just sink to the
@@ -1705,7 +1733,10 @@ async function setDeptRange(range) {
   // Show whatever we already have immediately, then top it up if needed —
   // avoids a blank loading flash when the data was already sufficient.
   renderDeptList(range);
-  if (!allLoaded && oldestLoadedTimeMs() > Date.now() - (DEPT_RANGE_MS[range] || DEPT_RANGE_MS['today'])) {
+  const needsMore = range === 'all'
+    ? !allLoaded
+    : (!allLoaded && oldestLoadedTimeMs() > Date.now() - (DEPT_RANGE_MS[range] || DEPT_RANGE_MS['today']));
+  if (needsMore) {
     renderDeptLoading();
     await ensureDeptDataLoaded(range, token);
   }
