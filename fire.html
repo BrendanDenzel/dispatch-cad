@@ -123,11 +123,41 @@ audio{display:none;}
 .map-pill-btn:hover{border-color:var(--blue);color:var(--blue-bright);}
 .map-pill-btn.clicked{background:var(--blue);border-color:var(--blue);color:#fff;}
 
-.map-view{display:none;flex:1;min-width:0;height:100%;}
+.map-view{display:none;flex:1;min-width:0;height:100%;position:relative;}
 .map-view.active{display:flex;}
+.map-search-bar{position:absolute;top:12px;left:12px;z-index:20;display:flex;gap:6px;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:6px;box-shadow:0 2px 8px rgba(0,0,0,.4);}
+.map-search-bar input{background:var(--panel3);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:11px;padding:6px 8px;border-radius:3px;width:220px;outline:none;}
+.map-search-bar input:focus{border-color:var(--blue);}
+.map-search-bar button{background:var(--blue);border:none;color:#fff;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;padding:0 12px;border-radius:3px;cursor:pointer;transition:background .15s;}
+.map-search-bar button:hover{background:var(--blue-bright);}
+.map-search-status{position:absolute;top:56px;left:12px;z-index:20;font-family:var(--mono);font-size:10px;color:var(--text2);background:rgba(19,22,28,.85);padding:4px 8px;border-radius:3px;display:none;}
+@media(max-width:580px){
+  .map-search-bar input{width:150px;}
+}
+.layers-hud{position:absolute;bottom:12px;left:12px;z-index:20;background:var(--panel2);border:1px solid var(--border2);border-radius:4px;padding:10px 12px;box-shadow:0 2px 8px rgba(0,0,0,.4);transition:transform .2s ease;min-width:150px;}
+.layers-hud.collapsed{transform:translateX(calc(-100% - 34px));}
+.layers-hud-title{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:8px;}
+.layers-row{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--text2);padding:4px 0;cursor:pointer;user-select:none;}
+.layers-row input{accent-color:var(--blue);width:13px;height:13px;cursor:pointer;flex-shrink:0;}
+.layers-hud-arrow{position:absolute;bottom:12px;left:calc(12px + 150px);z-index:21;width:22px;height:36px;background:var(--panel2);border:1px solid var(--border2);border-left:none;border-radius:0 4px 4px 0;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:left .2s ease;}
+.layers-hud-arrow svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;transition:transform .2s ease;}
+.layers-hud-arrow.collapsed-arrow{left:0;border-left:none;border-radius:0 4px 4px 0;}
+.layers-hud-arrow.collapsed-arrow svg{transform:rotate(180deg);}
+
+.station-marker{width:26px;height:26px;border-radius:50%;background:var(--panel);border:2px solid var(--amber-bright);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.5);transition:all .15s;}
+.station-marker svg{width:14px;height:14px;stroke:var(--amber-bright);fill:none;stroke-width:2;transition:stroke .15s;}
+.station-marker:hover{transform:scale(1.1);}
+.station-marker.active{background:var(--amber-bright);border-color:#fff;}
+.station-marker.active svg{stroke:#0c0e12;}
 #map-canvas{width:100%;height:100%;background:#0c0e12;}
 .maplibregl-ctrl-attrib{background:rgba(19,22,28,.85)!important;color:var(--text3)!important;font-size:9px!important;}
 .maplibregl-ctrl-attrib a{color:var(--text2)!important;}
+.maplibregl-popup-close-button{
+  right:8px!important;
+  top:6px!important;
+  font-size:16px!important;
+  color:#0c0e12!important;
+}
 .maplibregl-ctrl-group{background:var(--panel2)!important;border:1px solid var(--border2)!important;}
 .maplibregl-ctrl-group button{background:var(--panel2)!important;}
 .maplibregl-ctrl-group button:hover{background:var(--panel3)!important;}
@@ -417,7 +447,30 @@ audio{display:none;}
 </div>
 
 <div class="workspace" id="workspace">
-  <div class="map-view" id="view-map"><div id="map-canvas"></div></div>
+  <div class="map-view" id="view-map">
+  <div class="map-search-bar" id="map-search-bar">
+    <input type="text" id="map-search-input" placeholder="Search an address…" onkeydown="if(event.key==='Enter')searchAddress()">
+    <button onclick="searchAddress()">Search</button>
+  </div>
+  <div class="map-search-status" id="map-search-status"></div>
+
+  <button class="layers-hud-arrow" id="layers-hud-arrow" onclick="toggleLayersHud()">
+    <svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
+  </button>
+  <div class="layers-hud" id="layers-hud">
+    <div class="layers-hud-title">Layers</div>
+    <label class="layers-row">
+      <input type="checkbox" id="layer-toggle-districts" checked onchange="toggleDistrictsLayer(this.checked)">
+      Fire Districts
+    </label>
+    <label class="layers-row">
+      <input type="checkbox" id="layer-toggle-stations" checked onchange="toggleStationsLayer(this.checked)">
+      Fire Stations
+    </label>
+  </div>
+
+  <div id="map-canvas"></div>
+</div>
   <div class="feed-col" id="view-feed">
     <div class="col-hdr"><span class="col-hdr-title">Active Calls</span><span class="col-hdr-count" id="incident-count">0 calls</span></div>
     <div class="ptr-wrap" id="ptr-wrap"><div class="ptr-spinner" id="ptr-spinner"></div></div>
@@ -1214,11 +1267,15 @@ const PROTOMAPS_API_KEY = 'e0590e11b7479b37';
 
 let glMap = null;
 let mapViewActive = false;
+let glMapLoading = false;
+
+let fireDistrictsData = null;
 
 function loadFireDistricts() {
   fetch('fire-districts.geojson')
     .then(r => r.json())
     .then(data => {
+      fireDistrictsData = data;
       if (glMap.getSource('fire-districts')) return;
       glMap.addSource('fire-districts', { type: 'geojson', data });
 
@@ -1296,10 +1353,11 @@ class CustomAttributionControl {
 }
 
 async function initGlMap() {
-  if (glMap) return;
+  if (glMap || glMapLoading) return;
+  glMapLoading = true;
   loadCSS('https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css');
   await loadScript('https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js');
-  if (glMap) return; // guard against a second call finishing the await first
+  if (glMap) { glMapLoading = false; return; }
 
   glMap = new maplibregl.Map({
     container: 'map-canvas',
@@ -1310,7 +1368,273 @@ async function initGlMap() {
   });
   glMap.addControl(new maplibregl.NavigationControl(), 'top-right');
   glMap.addControl(new CustomAttributionControl(), 'bottom-right');
-  glMap.on('load', loadFireDistricts);
+  glMap.on('load', () => { loadFireDistricts(); loadFireStations(); });
+  attachMapClickToPin();
+  glMapLoading = false;
+}
+
+// ── Address search: geocode + district lookup ───────────────────────────
+let searchMarker = null;
+
+function pointInRing(point, ring) {
+  const [x, y] = point;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i], [xj, yj] = ring[j];
+    const intersect = ((yi > y) !== (yj > y)) &&
+      (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInPolygonGeom(point, geometry) {
+  if (geometry.type === 'Polygon') {
+    if (!pointInRing(point, geometry.coordinates[0])) return false;
+    for (let i = 1; i < geometry.coordinates.length; i++) {
+      if (pointInRing(point, geometry.coordinates[i])) return false; // inside a hole
+    }
+    return true;
+  } else if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.some(poly =>
+      pointInPolygonGeom(point, { type: 'Polygon', coordinates: poly }));
+  }
+  return false;
+}
+
+function findDistrictForPoint(lng, lat) {
+  if (!fireDistrictsData) return null;
+  const pt = [lng, lat];
+  const hit = fireDistrictsData.features.find(f => pointInPolygonGeom(pt, f.geometry));
+  return hit ? hit.properties.name : null;
+}
+
+const US_STATE_ABBR = {
+  'Alabama':'AL','Alaska':'AK','Arizona':'AZ','Arkansas':'AR','California':'CA','Colorado':'CO',
+  'Connecticut':'CT','Delaware':'DE','Florida':'FL','Georgia':'GA','Hawaii':'HI','Idaho':'ID',
+  'Illinois':'IL','Indiana':'IN','Iowa':'IA','Kansas':'KS','Kentucky':'KY','Louisiana':'LA',
+  'Maine':'ME','Maryland':'MD','Massachusetts':'MA','Michigan':'MI','Minnesota':'MN','Mississippi':'MS',
+  'Missouri':'MO','Montana':'MT','Nebraska':'NE','Nevada':'NV','New Hampshire':'NH','New Jersey':'NJ',
+  'New Mexico':'NM','New York':'NY','North Carolina':'NC','North Dakota':'ND','Ohio':'OH',
+  'Oklahoma':'OK','Oregon':'OR','Pennsylvania':'PA','Rhode Island':'RI','South Carolina':'SC',
+  'South Dakota':'SD','Tennessee':'TN','Texas':'TX','Utah':'UT','Vermont':'VT','Virginia':'VA',
+  'Washington':'WA','West Virginia':'WV','Wisconsin':'WI','Wyoming':'WY','District of Columbia':'DC'
+};
+
+function formatAddress(addr) {
+  if (!addr) return [];
+  const name = addr.amenity || addr.shop || addr.office || addr.building || addr.leisure || addr.tourism || null;
+  const street = [addr.house_number, addr.road].filter(Boolean).join(' ');
+  const town = addr.town || addr.city || addr.village || addr.hamlet || addr.county || null;
+  const stateAbbr = US_STATE_ABBR[addr.state] || addr.state || '';
+  const zipState = [addr.postcode, stateAbbr].filter(Boolean).join(' ');
+
+  const lines = [];
+  if (name) lines.push(name);
+  if (street) lines.push(street);
+  if (town) lines.push(town);
+  if (zipState) lines.push(zipState);
+  return lines;
+}
+
+function buildAddressPopupHtml(addressLines, district) {
+  const linesHtml = addressLines.map(l => escHtml(l)).join('<br>');
+  return `
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#0c0e12;min-width:170px;line-height:1.5;">
+      <div style="margin-bottom:6px;">${linesHtml || 'Unknown location'}</div>
+      <div style="padding-top:4px;border-top:1px solid #ddd;">
+        <strong>${escHtml(district || 'Outside mapped districts')}</strong>
+      </div>
+    </div>`;
+}
+
+function dropPin(lng, lat, addressLines, clearInput) {
+  const district = findDistrictForPoint(lng, lat);
+
+  if (searchMarker) searchMarker.remove();
+
+  const popupHtml = buildAddressPopupHtml(addressLines, district);
+  const popup = new maplibregl.Popup({ offset: 25, closeOnClick: true }).setHTML(popupHtml);
+  popup.on('close', () => {
+    if (searchMarker) { searchMarker.remove(); searchMarker = null; }
+    if (clearInput) document.getElementById('map-search-input').value = '';
+  });
+  searchMarker = new maplibregl.Marker({ color: '#e74c3c' })
+    .setLngLat([lng, lat])
+    .setPopup(popup)
+    .addTo(glMap);
+  searchMarker.togglePopup();
+}
+
+// ── Layers HUD ────────────────────────────────────────────────────────
+function toggleLayersHud() {
+  const hud = document.getElementById('layers-hud');
+  const arrow = document.getElementById('layers-hud-arrow');
+  hud.classList.toggle('collapsed');
+  arrow.classList.toggle('collapsed-arrow');
+}
+
+function toggleDistrictsLayer(visible) {
+  if (!glMap) return;
+  ['district-fill', 'district-line', 'district-label'].forEach(id => {
+    if (glMap.getLayer(id)) glMap.setLayoutProperty(id, 'visibility', visible ? 'visible' : 'none');
+  });
+}
+
+function toggleStationsLayer(visible) {
+  stationMarkers.forEach(m => {
+    m.getElement().style.display = visible ? 'flex' : 'none';
+  });
+}
+
+// ── Fire station markers ────────────────────────────────────────────────
+let stationMarkers = [];
+let selectedStationMarker = null;
+
+function buildStationPopupHtml(props) {
+  const lines = [];
+  if (props.station_number) lines.push(`<div style="font-weight:700;margin-bottom:2px;">Station ${escHtml(props.station_number)}</div>`);
+  if (props.name) lines.push(`<div style="font-weight:700;margin-bottom:4px;">${escHtml(props.name)}</div>`);
+  if (props.address) lines.push(`<div style="color:#4a5568;margin-bottom:6px;">${escHtml(props.address)}</div>`);
+  return `
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#0c0e12;min-width:170px;line-height:1.5;">
+      ${lines.join('')}
+      <div style="padding-top:4px;border-top:1px solid #ddd;">
+        <strong>${escHtml(props.district || 'Unknown district')}</strong>
+      </div>
+    </div>`;
+}
+
+function selectStationMarker(marker) {
+  const el = marker.getElement();
+  const wasActive = el.classList.contains('active');
+
+  if (selectedStationMarker && selectedStationMarker !== marker) {
+    selectedStationMarker.getElement().classList.remove('active');
+    if (selectedStationMarker.getPopup()) selectedStationMarker.getPopup().remove();
+  }
+
+  if (wasActive) {
+    el.classList.remove('active');
+    if (marker.getPopup()) marker.getPopup().remove();
+    selectedStationMarker = null;
+    return;
+  }
+
+  // Selecting a station clears any dropped address pin — only one thing
+  // "active" on the map at a time.
+  if (searchMarker) { searchMarker.remove(); searchMarker = null; }
+
+  el.classList.add('active');
+  selectedStationMarker = marker;
+  marker.togglePopup();
+}
+
+function loadFireStations() {
+  fetch('fire-stations.geojson')
+    .then(r => r.json())
+    .then(data => {
+      if (stationMarkers.length > 0) return; // already loaded
+      data.features.forEach(f => {
+        const el = document.createElement('div');
+        el.className = 'station-marker';
+        el.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V10l7-6 7 6v11M9 21v-6h6v6"/></svg>`;
+
+        const popup = new maplibregl.Popup({ offset: 20, closeOnClick: true })
+          .setHTML(buildStationPopupHtml(f.properties));
+
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat(f.geometry.coordinates)
+          .setPopup(popup)
+          .addTo(glMap);
+
+        popup.on('close', () => {
+          el.classList.remove('active');
+          if (selectedStationMarker === marker) selectedStationMarker = null;
+        });
+
+        el.addEventListener('click', (e) => {
+          e.stopPropagation(); // critical: don't let this bubble to the map click handler and drop a new address pin
+          selectStationMarker(marker);
+        });
+
+        stationMarkers.push(marker);
+      });
+    })
+    .catch(err => console.error('Failed to load fire stations', err));
+}
+
+async function searchAddress() {
+  const input  = document.getElementById('map-search-input');
+  const status = document.getElementById('map-search-status');
+  const query  = input.value.trim();
+  if (!query) return;
+  if (!glMap) return; // map tab must be opened first — search bar only lives inside it anyway
+
+  status.style.display = 'block';
+  status.textContent = 'Searching…';
+
+  try {
+    // Biased toward the Amherst, NY area
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&addressdetails=1&viewbox=-78.95,43.05,-78.65,42.90&q=${encodeURIComponent(query + ', Amherst, NY')}`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const results = await res.json();
+
+    if (!results || results.length === 0) {
+      status.textContent = 'Address not found';
+      setTimeout(() => status.style.display = 'none', 2500);
+      return;
+    }
+
+    const r = results[0];
+    const lng = parseFloat(r.lon), lat = parseFloat(r.lat);
+    const addressLines = formatAddress(r.address);
+
+    dropPin(lng, lat, addressLines.length ? addressLines : [r.display_name], true);
+
+    glMap.flyTo({ center: [lng, lat], zoom: 15 });
+    status.style.display = 'none';
+  } catch (e) {
+    console.error(e);
+    status.textContent = 'Search failed';
+    setTimeout(() => status.style.display = 'none', 2500);
+  }
+}
+
+async function reverseGeocode(lng, lat) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const r = await res.json();
+    const lines = formatAddress(r && r.address);
+    return lines.length ? lines : [`${lat.toFixed(5)}, ${lng.toFixed(5)}`];
+  } catch (e) {
+    return [`${lat.toFixed(5)}, ${lng.toFixed(5)}`];
+  }
+}
+
+function attachMapClickToPin() {
+  if (!glMap) return;
+  glMap.on('click', async (e) => {
+    // Don't drop a new pin if an address pin is already down, OR if a
+    // station is currently selected — this click just deselects the
+    // station instead.
+    if (searchMarker) return;
+    if (selectedStationMarker) {
+      selectedStationMarker.getElement().classList.remove('active');
+      if (selectedStationMarker.getPopup()) selectedStationMarker.getPopup().remove();
+      selectedStationMarker = null;
+      return;
+    }
+
+    const { lng, lat } = e.lngLat;
+    dropPin(lng, lat, ['Looking up address…'], false);
+    const addressLines = await reverseGeocode(lng, lat);
+    if (searchMarker) {
+      const district = findDistrictForPoint(lng, lat);
+      searchMarker.getPopup().setHTML(buildAddressPopupHtml(addressLines, district));
+    }
+  });
 }
 
 const MAP_ICON_SVG  = '<path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>';
