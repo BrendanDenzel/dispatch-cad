@@ -211,6 +211,9 @@ audio{display:none;}
 .svc-toggle a.active.police{background:var(--svc-police);color:#fff;}
 .svc-toggle a.active.fire{background:var(--svc-fire);color:#fff;}
 
+.goto-map-btn{display:inline-flex;align-items:center;gap:4px;margin-top:6px;font-family:var(--mono);font-size:8.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;background:var(--panel2);border:1px solid var(--border2);color:var(--blue-bright);padding:3px 7px;border-radius:3px;cursor:pointer;transition:all .15s;position:relative;top:-1px;left:6px;}
+.goto-map-btn:hover{border-color:var(--blue-bright);background:var(--blue-dim);}
+.goto-map-btn svg{width:8px;height:8px;fill:none;stroke:currentColor;stroke-width:2;flex-shrink:0;}
 .goto-log-btn{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;background:var(--panel2);border:1px solid var(--border2);color:var(--blue-bright);padding:7px 12px;border-radius:3px;cursor:pointer;transition:all .15s;}
 .goto-log-btn:hover{border-color:var(--blue-bright);background:var(--blue-dim);}
 .goto-log-btn svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;flex-shrink:0;}
@@ -297,6 +300,7 @@ audio{display:none;}
 .mnb-lbl{font-size:9px;letter-spacing:.5px;text-transform:uppercase;font-family:var(--mono);}
 @media(max-width:860px){.side{display:none;}.stat .stat-lbl{font-size:8px;}.stat-n{font-size:18px;}}
 @media(max-width:580px){
+  .goto-map-btn{display:block;width:fit-content;top:0;left:0;margin-top:8px;}
   #stat-mostcalls{font-size:11px;}
   .tb-pill-desktop{display:none;}.tb-pill-mobile{display:flex;}
   .topbar{padding:0 10px;}.tb-sub,.tb-date{display:none;}.tb-clock{font-size:14px;}
@@ -1352,25 +1356,40 @@ class CustomAttributionControl {
   }
 }
 
-async function initGlMap() {
-  if (glMap || glMapLoading) return;
-  glMapLoading = true;
-  loadCSS('https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css');
-  await loadScript('https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js');
-  if (glMap) { glMapLoading = false; return; }
+let glMapReadyPromise = null;
 
-  glMap = new maplibregl.Map({
-    container: 'map-canvas',
-    style: `https://api.protomaps.com/styles/v5/dark/en.json?key=${PROTOMAPS_API_KEY}`,
-    center: [-78.7998, 42.9784], // Amherst, NY (lng, lat)
-    zoom: 13,
-    attributionControl: false,
-  });
-  glMap.addControl(new maplibregl.NavigationControl(), 'top-right');
-  glMap.addControl(new CustomAttributionControl(), 'bottom-right');
-  glMap.on('load', () => { loadFireDistricts(); loadFireStations(); });
-  attachMapClickToPin();
-  glMapLoading = false;
+async function initGlMap() {
+  if (glMap) return glMapReadyPromise;
+  if (glMapLoading) return glMapReadyPromise;
+  glMapLoading = true;
+
+  glMapReadyPromise = (async () => {
+    loadCSS('https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css');
+    await loadScript('https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js');
+
+    glMap = new maplibregl.Map({
+      container: 'map-canvas',
+      style: `https://api.protomaps.com/styles/v5/dark/en.json?key=${PROTOMAPS_API_KEY}`,
+      center: [-78.7998, 42.9784], // Amherst, NY (lng, lat)
+      zoom: 13,
+      attributionControl: false,
+    });
+    glMap.addControl(new maplibregl.NavigationControl(), 'top-right');
+    glMap.addControl(new CustomAttributionControl(), 'bottom-right');
+    attachMapClickToPin();
+
+    await new Promise(resolve => {
+      glMap.on('load', () => {
+        loadFireDistricts();
+        loadFireStations();
+        resolve();
+      });
+    });
+
+    glMapLoading = false;
+  })();
+
+  return glMapReadyPromise;
 }
 
 // ── Address search: geocode + district lookup ───────────────────────────
@@ -1464,6 +1483,62 @@ function dropPin(lng, lat, addressLines, clearInput) {
     .setPopup(popup)
     .addTo(glMap);
   searchMarker.togglePopup();
+}
+
+async function showIncidentOnMap(location) {
+  closeModalDirect();
+
+  const isMobile = window.innerWidth <= 580;
+  if (isMobile) {
+    mobTab('map');
+  } else if (!mapViewActive) {
+    toggleMapView();
+  }
+
+  await initGlMap();
+  if (glMap) setTimeout(() => glMap.resize(), 60); // let layout settle before flying to the pin
+
+  await placeIncidentPin(location);
+}
+
+async function placeIncidentPin(location) {
+  if (!glMap || !location) return;
+
+  // Same "one active thing at a time" rule as clicking the map or
+  // selecting a station — clear any station selection first.
+  if (selectedStationMarker) {
+    selectedStationMarker.getElement().classList.remove('active');
+    if (selectedStationMarker.getPopup()) selectedStationMarker.getPopup().remove();
+    selectedStationMarker = null;
+  }
+
+  const status = document.getElementById('map-search-status');
+  if (status) { status.style.display = 'block'; status.textContent = 'Locating call…'; }
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&addressdetails=1&viewbox=-78.95,43.05,-78.65,42.90&q=${encodeURIComponent(location + ', Amherst, NY')}`;
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    const results = await res.json();
+
+    if (!results || results.length === 0) {
+      if (status) { status.textContent = 'Location not found'; setTimeout(() => status.style.display = 'none', 2500); }
+      return;
+    }
+
+    const r = results[0];
+    const lng = parseFloat(r.lon), lat = parseFloat(r.lat);
+    const addressLines = formatAddress(r.address);
+
+    // dropPin() already handles removing any existing address pin and
+    // wiring the same closeOnClick/close-clears-marker behavior as every
+    // other pin on this map.
+    dropPin(lng, lat, addressLines.length ? addressLines : [r.display_name], false);
+    glMap.flyTo({ center: [lng, lat], zoom: 15 });
+    if (status) status.style.display = 'none';
+  } catch (e) {
+    console.error(e);
+    if (status) { status.textContent = 'Search failed'; setTimeout(() => status.style.display = 'none', 2500); }
+  }
 }
 
 // ── Layers HUD ────────────────────────────────────────────────────────
@@ -1974,7 +2049,10 @@ function openModal(id) {
     ? `<span class="loc-link" onclick="toggleMap('${loc.replace(/'/g,"\\'")}')">
         <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>${escHtml(loc)}
        </span>
-       <span class="map-toggle-hint">↓ click to map</span>
+       <button class="goto-map-btn" onclick="showIncidentOnMap('${loc.replace(/'/g,"\\'")}')">
+         <svg viewBox="0 0 24 24"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4z"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+         Show on district map
+       </button>
        <div class="map-container" id="map-embed-container"></div>`
     : escHtml(loc);
 
