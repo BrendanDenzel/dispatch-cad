@@ -9,6 +9,8 @@ from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
 from collections import deque
+from admin_stats import admin_bp
+app.register_blueprint(admin_bp)
 
 GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL   = os.environ.get("SUPABASE_URL")
