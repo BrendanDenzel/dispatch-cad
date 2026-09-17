@@ -19,12 +19,15 @@ reflect whichever worker answered, not a true combined total — that
 would need a shared store (SQLite/Redis) instead of the in-memory
 structures below.
 
-stdout/stderr capture: on import, this module wraps sys.stdout and
-sys.stderr so that every print() statement anywhere in the app (your
-[fire-scanner]/[fire] lines, tracebacks, etc.) is mirrored into the
-same log buffer that /admin/logs serves — in addition to still going
-to the real terminal/journalctl as before. No changes needed to your
-existing print() calls.
+# new
+print() capture: on import, this module patches the builtin print()
+function so every print() statement anywhere in the app (your
+[fire-scanner]/[fire] lines, etc.) is mirrored into the same log
+buffer that /admin/logs serves — in addition to still printing to
+the real terminal/journalctl as before. No changes needed to your
+existing print() calls. Note: this only catches print() itself, not
+raw sys.stdout.write() calls or unhandled tracebacks (those still go
+to journalctl only).
 """
 
 # new
