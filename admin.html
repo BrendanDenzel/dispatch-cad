@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fire CAD — Server Admin</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115; --card: #1a1d24; --border: #2a2e38;
+    --text: #e6e8eb; --muted: #8b93a1;
+    --ok: #3ddc84; --warn: #f5b940; --bad: #f05d5d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px; margin-bottom: 20px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px;
+  }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .card .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
+  .card .sub-value { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .bar-bg { background: #2a2e38; border-radius: 6px; height: 6px; margin-top: 10px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 6px; transition: width .4s; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .bg-ok { background: var(--ok); } .bg-warn { background: var(--warn); } .bg-bad { background: var(--bad); }
+  .alert {
+    padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;
+    font-size: 14px; display: none;
+  }
+  .alert.show { display: block; }
+  .chart-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+  .chart-wrap h3 { margin: 0 0 12px; font-size: 14px; color: var(--muted); font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  #keyGate { max-width: 360px; margin: 80px auto; text-align: center; }
+  #keyGate input { width: 100%; padding: 10px; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 6px; margin: 12px 0; }
+  #keyGate button { padding: 10px 20px; background: #3d6bf5; color: white; border: none; border-radius: 6px; cursor: pointer; }
+  #dashboard { display: none; }
+  #logBox { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+  #logBox div { padding: 2px 0; border-bottom: 1px solid var(--border); }
+  #logBox .ts { color: var(--muted); margin-right: 8px; }
+</style>
+</head>
+<body>
+
+<div id="keyGate">
+  <h1>Fire CAD Admin</h1>
+  <p class="sub">Enter admin key to view server stats</p>
+  <input type="password" id="keyInput" placeholder="Admin key" />
+  <div><button onclick="saveKeyAndStart()">Connect</button></div>
+  <p id="gateError" class="bad sub" style="display:none">Invalid key or can't reach server.</p>
+</div>
+
+<div id="dashboard">
+  <h1>Fire CAD — Server Health</h1>
+  <p class="sub">Updates every 5s · <span id="uptime"></span></p>
+
+  <div id="swapAlert" class="alert bg-bad"></div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">CPU</div>
+      <div class="value" id="cpuVal">--%</div>
+      <div class="bar-bg"><div class="bar-fill" id="cpuBar"></div></div>
+    </div>
+    <div class="card">
+      <div class="label">Memory</div>
+      <div class="value" id="memVal">--%</div>
+      <div class="sub-value" id="memSub"></div>
+      <div class="bar-bg"><div class="bar-fill" id="memBar"></div></div>
+    </div>
+    <div class="card">
+      <div class="label">Swap</div>
+      <div class="value" id="swapVal">--%</div>
+      <div class="sub-value" id="swapSub"></div>
+      <div class="bar-bg"><div class="bar-fill" id="swapBar"></div></div>
+    </div>
+    <div class="card">
+      <div class="label">Load Avg (1/5/15m)</div>
+      <div class="value" id="loadVal">--</div>
+      <div class="sub-value" id="loadSub"></div>
+    </div>
+  </div>
+
+  <div class="chart-wrap">
+    <h3>CPU / Memory / Swap over time (%)</h3>
+    <canvas id="historyChart" height="80"></canvas>
+  </div>
+
+  <div class="chart-wrap">
+    <h3>Requests by endpoint (this worker, since restart)</h3>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Requests</th></tr></thead>
+      <tbody id="endpointTable"></tbody>
+    </table>
+  </div>
+
+  <div class="chart-wrap">
+    <h3>Event log</h3>
+    <div id="logBox"></div>
+  </div>
+</div>
+
+<script>
+let ADMIN_KEY = "";
+const API_BASE = "http://129.80.219.138:5000";
+let chart;
+let lastLogTime = 0;
+
+function saveKeyAndStart() {
+  ADMIN_KEY = document.getElementById("keyInput").value.trim();
+  if (!ADMIN_KEY) return;
+  poll(true);
+  pollLogs();
+}
+
+function pctColor(pct) {
+  if (pct >= 90) return { cls: "bad", bar: "bg-bad" };
+  if (pct >= 70) return { cls: "warn", bar: "bg-warn" };
+  return { cls: "ok", bar: "bg-ok" };
+}
+
+function fmtUptime(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return `up ${h}h ${m}m`;
+}
+
+function initChart() {
+  const ctx = document.getElementById("historyChart").getContext("2d");
+  chart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        { label: "CPU", data: [], borderColor: "#3d6bf5", tension: 0.3, pointRadius: 0 },
+        { label: "Memory", data: [], borderColor: "#3ddc84", tension: 0.3, pointRadius: 0 },
+        { label: "Swap", data: [], borderColor: "#f05d5d", tension: 0.3, pointRadius: 0 },
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { min: 0, max: 100, ticks: { color: "#8b93a1" }, grid: { color: "#2a2e38" } },
+        x: { ticks: { color: "#8b93a1", maxTicksLimit: 8 }, grid: { display: false } }
+      },
+      plugins: { legend: { labels: { color: "#e6e8eb" } } }
+    }
+  });
+}
+
+async function poll(isFirst) {
+  try {
+    const res = await fetch(`${API_BASE}/admin/stats?key=${encodeURIComponent(ADMIN_KEY)}`);
+    if (!res.ok) throw new Error("unauthorized");
+    const data = await res.json();
+
+    if (isFirst) {
+      document.getElementById("keyGate").style.display = "none";
+      document.getElementById("dashboard").style.display = "block";
+      initChart();
+    }
+
+    const c = data.current;
+
+    document.getElementById("uptime").textContent = fmtUptime(c.uptime_sec);
+
+    const cpu = pctColor(c.cpu_percent);
+    document.getElementById("cpuVal").textContent = c.cpu_percent.toFixed(0) + "%";
+    document.getElementById("cpuVal").className = "value " + cpu.cls;
+    document.getElementById("cpuBar").style.width = c.cpu_percent + "%";
+    document.getElementById("cpuBar").className = "bar-fill " + cpu.bar;
+
+    const mem = pctColor(c.mem_percent);
+    document.getElementById("memVal").textContent = c.mem_percent.toFixed(0) + "%";
+    document.getElementById("memVal").className = "value " + mem.cls;
+    document.getElementById("memSub").textContent = `${c.mem_used_mb} / ${c.mem_total_mb} MB`;
+    document.getElementById("memBar").style.width = c.mem_percent + "%";
+    document.getElementById("memBar").className = "bar-fill " + mem.bar;
+
+    const swap = pctColor(c.swap_percent);
+    document.getElementById("swapVal").textContent = c.swap_percent.toFixed(0) + "%";
+    document.getElementById("swapVal").className = "value " + swap.cls;
+    document.getElementById("swapSub").textContent = `${c.swap_used_mb} / ${c.swap_total_mb} MB`;
+    document.getElementById("swapBar").style.width = c.swap_percent + "%";
+    document.getElementById("swapBar").className = "bar-fill " + swap.bar;
+
+    document.getElementById("loadVal").textContent = `${c.load1} / ${c.load5} / ${c.load15}`;
+    document.getElementById("loadSub").textContent = `${c.cpu_cores} cores — load above this = requests queuing`;
+
+    // Trend-based alert: is swap climbing steadily over the last ~1 min?
+    const hist = data.history;
+    const alertEl = document.getElementById("swapAlert");
+    if (hist.length >= 8) {
+      const recent = hist.slice(-8);
+      const rising = recent.every((h, i) => i === 0 || h.swap_used_mb >= recent[i - 1].swap_used_mb);
+      const grew = recent[recent.length - 1].swap_used_mb - recent[0].swap_used_mb;
+      if (rising && grew > 20) {
+        alertEl.className = "alert show bg-bad";
+        alertEl.textContent = `⚠ Swap usage has climbed steadily for the last ~40s (+${grew}MB) — likely a processing backlog forming, not caught up yet.`;
+      } else if (c.swap_percent > 85) {
+        alertEl.className = "alert show bg-bad";
+        alertEl.textContent = `⚠ Swap is at ${c.swap_percent.toFixed(0)}% — box is under heavy memory pressure.`;
+      } else {
+        alertEl.className = "alert";
+      }
+    }
+
+    // Chart update
+    chart.data.labels = hist.map(h => new Date(h.timestamp * 1000).toLocaleTimeString());
+    chart.data.datasets[0].data = hist.map(h => h.cpu_percent);
+    chart.data.datasets[1].data = hist.map(h => h.mem_percent);
+    chart.data.datasets[2].data = hist.map(h => h.swap_percent);
+    chart.update("none");
+
+    // Endpoint table
+    const tbody = document.getElementById("endpointTable");
+    const entries = Object.entries(c.requests_by_endpoint || {}).sort((a, b) => b[1] - a[1]);
+    tbody.innerHTML = entries.length
+      ? entries.map(([path, count]) => `<tr><td>${path}</td><td>${count}</td></tr>`).join("")
+      : `<tr><td colspan="2" style="color:var(--muted)">No requests recorded yet on this worker</td></tr>`;
+
+    document.getElementById("gateError").style.display = "none";
+  } catch (e) {
+    if (isFirst) document.getElementById("gateError").style.display = "block";
+  }
+}
+
+async function pollLogs() {
+  try {
+    const res = await fetch(`${API_BASE}/admin/logs?key=${encodeURIComponent(ADMIN_KEY)}&since=${lastLogTime}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.entries.length) return;
+
+    const box = document.getElementById("logBox");
+    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 20;
+
+    data.entries.forEach(e => {
+      const line = document.createElement("div");
+      const t = new Date(e.timestamp * 1000).toLocaleTimeString();
+      line.innerHTML = `<span class="ts">${t}</span>${e.msg}`;
+      box.appendChild(line);
+    });
+    lastLogTime = data.entries[data.entries.length - 1].timestamp;
+
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  } catch (e) {}
+}
+
+setInterval(() => { if (ADMIN_KEY) { poll(false); pollLogs(); } }, 5000);
+</script>
+</body>
+</html>
