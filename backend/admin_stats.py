@@ -27,8 +27,8 @@ to the real terminal/journalctl as before. No changes needed to your
 existing print() calls.
 """
 
+# new
 import time
-import sys
 import shutil
 import threading
 import psutil
@@ -69,39 +69,31 @@ def log_event(msg):
         _prune_log()
 
 
-class _TeeStream:
-    """Mirrors writes to the real stdout/stderr while also feeding
-    complete lines into the admin log, so your existing print()
-    statements (VAD capture, transcripts, etc.) show up on the
-    dashboard with zero changes to fire.py."""
+# new
+import builtins
 
-    def __init__(self, original):
-        self._original = original
-        self._buffer = ""
-
-    def write(self, data):
-        self._original.write(data)
-        self._buffer += data
-        while "\n" in self._buffer:
-            line, self._buffer = self._buffer.split("\n", 1)
-            if line.strip():
-                log_event(line)
-
-    def flush(self):
-        self._original.flush()
-
-    def isatty(self):
-        return False
+_original_print = builtins.print
 
 
-def _capture_stdout():
-    if not isinstance(sys.stdout, _TeeStream):
-        sys.stdout = _TeeStream(sys.stdout)
-    if not isinstance(sys.stderr, _TeeStream):
-        sys.stderr = _TeeStream(sys.stderr)
+def _tee_print(*args, **kwargs):
+    """Patches the print() builtin directly so every print() call in
+    the app (fire.py's [fire-scanner]/[fire] lines, etc.) is mirrored
+    into the admin log. This is more reliable than wrapping sys.stdout
+    under gevent, since gevent's own monkey-patching can interfere
+    with stdout redirection depending on timing."""
+    _original_print(*args, **kwargs)
+    sep = kwargs.get("sep", " ")
+    msg = sep.join(str(a) for a in args)
+    if msg.strip():
+        log_event(msg)
 
 
-_capture_stdout()
+def _capture_print():
+    if builtins.print is not _tee_print:
+        builtins.print = _tee_print
+
+
+_capture_print()
 
 
 @admin_bp.before_app_request
