@@ -237,6 +237,35 @@ audio{display:none;}
   .svc-toggle-mobile{display:block;}
 }
 @media(min-width:581px) and (max-width:860px){.stats .stat:nth-child(5){display:none;}}
+
+/* ── Temporary Shutdown Notice ── */
+.shutdown-banner{
+  background:linear-gradient(90deg, rgba(214,137,16,0.18), rgba(214,137,16,0.08));
+  border-bottom:2px solid var(--amber-bright);
+  padding:10px 16px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-shrink:0;
+}
+.shutdown-icon{
+  width:26px;height:26px;
+  flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--amber-dim);
+  border:1px solid rgba(243,156,18,.4);
+  border-radius:50%;
+  color:var(--amber-bright);
+}
+.shutdown-icon svg{width:15px;height:15px;fill:currentColor;}
+.shutdown-text{font-size:12px;line-height:1.5;color:var(--text);}
+.shutdown-text strong{color:var(--amber-bright);font-weight:700;letter-spacing:.3px;}
+.shutdown-text a{color:var(--blue-bright);font-weight:600;text-decoration:none;border-bottom:1px solid rgba(74,158,255,.4);}
+.shutdown-text a:hover{border-color:var(--blue-bright);}
+@media(max-width:580px){
+  .shutdown-banner{padding:8px 10px;gap:8px;}
+  .shutdown-text{font-size:11px;}
+}
 </style>
 </head>
 <body>
@@ -258,6 +287,15 @@ audio{display:none;}
   <a href="fire.html" class="fire">Fire</a>
 </div>
 </div>
+</div>
+
+<div class="shutdown-banner">
+  <div class="shutdown-icon">
+    <svg viewBox="0 0 24 24"><path d="M12 2L1 21h22L12 2zm0 6v6m0 3.5h.01"/></svg>
+  </div>
+  <div class="shutdown-text">
+    <strong>⚠ Temporarily Offline —</strong> the Police CAD feed is shut down for now while I work through a backend rework. It may come back within the next few days to a couple weeks. In the meantime, the <a href="fire.html">Fire feed</a> is up and running on the new backend.
+  </div>
 </div>
 
 <div class="scanbar">
