@@ -1370,8 +1370,8 @@ async function initGlMap() {
     glMap = new maplibregl.Map({
       container: 'map-canvas',
       style: `https://api.protomaps.com/styles/v5/dark/en.json?key=${PROTOMAPS_API_KEY}`,
-      center: [-78.7998, 42.9784], // Amherst, NY (lng, lat)
-      zoom: 13,
+      center: [-78.6512897, 43.0273614], // Amherst, NY (lng, lat)
+      zoom: 11,
       attributionControl: false,
     });
     glMap.addControl(new maplibregl.NavigationControl(), 'top-right');
