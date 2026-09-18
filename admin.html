@@ -47,7 +47,7 @@
   #keyGate input { width: 100%; padding: 10px; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 6px; margin: 12px 0; }
   #keyGate button { padding: 10px 20px; background: #3d6bf5; color: white; border: none; border-radius: 6px; cursor: pointer; }
   #dashboard { display: none; }
-  #logBox { max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+  #logBox { max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
   #logBox div { padding: 2px 0; border-bottom: 1px solid var(--border); }
   #logBox .ts { color: var(--muted); margin-right: 8px; }
 </style>
@@ -64,7 +64,7 @@
 
 <div id="dashboard">
   <h1>Fire CAD — Server Health</h1>
-  <p class="sub">Updates every 5s · <span id="uptime"></span></p>
+  <p class="sub">Stats every 5s · Logs every 2s · <span id="uptime"></span></p>
 
   <div id="swapAlert" class="alert bg-bad"></div>
 
@@ -107,14 +107,14 @@
   </div>
 
   <div class="chart-wrap">
-    <h3>Event log</h3>
+    <h3>Live log (up to 8h scrollback)</h3>
     <div id="logBox"></div>
   </div>
 </div>
 
 <script>
 let ADMIN_KEY = "";
-const API_BASE = "http://129.80.219.138:5000";
+const API_BASE = "https://firecad.duckdns.org/";
 let chart;
 let lastLogTime = 0;
 
@@ -258,7 +258,8 @@ async function pollLogs() {
   } catch (e) {}
 }
 
-setInterval(() => { if (ADMIN_KEY) { poll(false); pollLogs(); } }, 5000);
+setInterval(() => { if (ADMIN_KEY) poll(false); }, 5000);
+setInterval(() => { if (ADMIN_KEY) pollLogs(); }, 2000);
 </script>
 </body>
 </html>
