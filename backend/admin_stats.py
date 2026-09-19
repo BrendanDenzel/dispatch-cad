@@ -121,7 +121,7 @@ def _why_error(msg, ctx):
     elif "timed out" in m or "timeout" in m:
         why = "A network call timed out (audio stream, Groq, or Supabase)"
     elif "curl failed" in m or "playlist fetch" in m or "segment fetch" in m:
-        why = "Couldn't download the audio stream (Broadcastify or network problem)"
+        why = "Couldn't download the audio stream (Broadcast audio or network problem)"
     elif "ffmpeg" in m or "ffprobe" in m:
         why = "Audio conversion failed (bad/short audio or ffmpeg problem)"
     elif any(w in m for w in ("supabase", "postgrest", "audio upload",
