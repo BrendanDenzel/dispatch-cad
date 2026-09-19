@@ -6,6 +6,7 @@ from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
 from groq import Groq
 from supabase import create_client
+from admin_stats import admin_bp 
 
 clients = []
 
@@ -26,6 +27,7 @@ def get_db():
 
 app = Flask(__name__)
 CORS(app)
+app.register_blueprint(admin_bp)
 
 # ─────────────────────────────────────────────
 # Routes
