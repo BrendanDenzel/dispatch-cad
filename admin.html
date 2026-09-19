@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Fire CAD — Server Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAD — Server Admin</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
   :root {
     --bg: #0f1115; --card: #1a1d24; --border: #2a2e38;
     --text: #e6e8eb; --muted: #8b93a1;
-    --ok: #3ddc84; --warn: #f5b940; --bad: #f05d5d;
+    --ok: #3ddc84; --warn: #f5b940; --bad: #f05d5d; --accent: #3d6bf5;
   }
   * { box-sizing: border-box; }
   body {
@@ -22,10 +23,7 @@
     display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 14px; margin-bottom: 20px;
   }
-  .card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 10px; padding: 16px;
-  }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
   .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
   .card .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
   .card .sub-value { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -33,233 +31,464 @@
   .bar-fill { height: 100%; border-radius: 6px; transition: width .4s; }
   .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
   .bg-ok { background: var(--ok); } .bg-warn { background: var(--warn); } .bg-bad { background: var(--bad); }
-  .alert {
-    padding: 12px 16px; border-radius: 8px; margin-bottom: 20px;
-    font-size: 14px; display: none;
-  }
+  .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; display: none; }
   .alert.show { display: block; }
   .chart-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 20px; }
   .chart-wrap h3 { margin: 0 0 12px; font-size: 14px; color: var(--muted); font-weight: 500; }
+  .chart-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .chart-head h3 { margin: 0; }
+  select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 12px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { color: var(--muted); font-weight: 500; }
   #keyGate { max-width: 360px; margin: 80px auto; text-align: center; }
   #keyGate input { width: 100%; padding: 10px; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 6px; margin: 12px 0; }
-  #keyGate button { padding: 10px 20px; background: #3d6bf5; color: white; border: none; border-radius: 6px; cursor: pointer; }
+  #keyGate button { padding: 10px 20px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; }
   #dashboard { display: none; }
-  #logBox { max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
-  #logBox div { padding: 2px 0; border-bottom: 1px solid var(--border); }
-  #logBox .ts { color: var(--muted); margin-right: 8px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 22px; border-bottom: 1px solid var(--border); }
+  .tab {
+    background: none; border: none; color: var(--muted); font-size: 15px; font-weight: 600;
+    padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab:focus-visible, select:focus-visible, .prow:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .badge { display: inline-block; min-width: 18px; padding: 1px 6px; margin-left: 6px; border-radius: 9px; font-size: 11px; background: var(--bad); color: #fff; }
+  .badge:empty { display: none; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .status { font-size: 12px; margin-left: 8px; }
+
+  .hint { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+  .explain { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; background: #14171d; font-size: 13px; line-height: 1.55; display: none; }
+  .explain.show { display: block; }
+  .explain h4 { margin: 0 0 6px; font-size: 14px; }
+  .explain ul { margin: 6px 0 0; padding-left: 18px; }
+  .explain .why-label { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .explain .backed { color: var(--warn); }
+
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .chip { font-size: 12px; padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border); background: #14171d; }
+  .kind { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+  .kind.crash { background: rgba(240,93,93,.18); color: var(--bad); }
+  .kind.error { background: rgba(245,185,64,.16); color: var(--warn); }
+  .kind.restart { background: rgba(61,107,245,.18); color: #8fa8ff; }
+  .prow { cursor: pointer; }
+  .prow:hover td { background: #14171d; }
+  .pdetail td { background: #14171d; font-size: 12px; line-height: 1.6; }
+  .pdetail .mono { font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--muted); }
+  .empty-ok { color: var(--ok); font-size: 14px; padding: 6px 0; }
+  .more { color: var(--muted); font-size: 12px; padding-top: 8px; }
+
+  .logBox { max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+  .logBox div { padding: 2px 0; border-bottom: 1px solid var(--border); }
+  .logBox .ts { color: var(--muted); margin-right: 8px; }
+  .logBox .k-error, .logBox .k-crash { color: var(--bad); }
+  .logBox .k-new_call { color: var(--ok); }
 </style>
 </head>
 <body>
 
 <div id="keyGate">
-  <h1>Fire CAD Admin</h1>
-  <p class="sub">Enter admin key to view server stats</p>
-  <input type="password" id="keyInput" placeholder="Admin key" />
+  <h1>CAD Admin</h1>
+  <p class="sub">Enter the admin key to view Fire and Police server stats</p>
+  <input type="password" id="keyInput" placeholder="Admin key" autocomplete="off" />
   <div><button onclick="saveKeyAndStart()">Connect</button></div>
-  <p id="gateError" class="bad sub" style="display:none">Invalid key or can't reach server.</p>
+  <p id="gateError" class="bad sub" style="display:none">Invalid key, or neither server can be reached.</p>
 </div>
 
 <div id="dashboard">
-  <h1>Fire CAD — Server Health</h1>
-  <p class="sub">Stats every 5s · Logs every 2s · <span id="uptime"></span></p>
-
-  <div id="swapAlert" class="alert bg-bad"></div>
-
-  <div class="grid">
-    <div class="card">
-      <div class="label">CPU</div>
-      <div class="value" id="cpuVal">--%</div>
-      <div class="bar-bg"><div class="bar-fill" id="cpuBar"></div></div>
-    </div>
-    <div class="card">
-      <div class="label">Memory</div>
-      <div class="value" id="memVal">--%</div>
-      <div class="sub-value" id="memSub"></div>
-      <div class="bar-bg"><div class="bar-fill" id="memBar"></div></div>
-    </div>
-    <div class="card">
-      <div class="label">Swap</div>
-      <div class="value" id="swapVal">--%</div>
-      <div class="sub-value" id="swapSub"></div>
-      <div class="bar-bg"><div class="bar-fill" id="swapBar"></div></div>
-    </div>
-    <div class="card">
-      <div class="label">Load Avg (1/5/15m)</div>
-      <div class="value" id="loadVal">--</div>
-      <div class="sub-value" id="loadSub"></div>
-    </div>
-  </div>
-
-  <div class="chart-wrap">
-    <h3>CPU / Memory / Swap over time (%)</h3>
-    <canvas id="historyChart" height="80"></canvas>
-  </div>
-
-  <div class="chart-wrap">
-    <h3>Requests by endpoint (this worker, since restart)</h3>
-    <table>
-      <thead><tr><th>Endpoint</th><th>Requests</th></tr></thead>
-      <tbody id="endpointTable"></tbody>
-    </table>
-  </div>
-
-  <div class="chart-wrap">
-    <h3>Live log (up to 8h scrollback)</h3>
-    <div id="logBox"></div>
-  </div>
+  <div class="tabs" id="tabs"></div>
+  <div id="panels"></div>
 </div>
 
 <script>
-let ADMIN_KEY = "";
-const API_BASE = "https://firecad.duckdns.org/";
-let chart;
-let lastLogTime = 0;
+// ── Servers to monitor. Add another here to get another tab. ──────────────
+const SERVICES = {
+  fire:   { title: "Fire CAD",   base: "https://firecad.duckdns.org" },
+  police: { title: "Police CAD", base: "https://policecad.duckdns.org" },
+};
 
-function saveKeyAndStart() {
-  ADMIN_KEY = document.getElementById("keyInput").value.trim();
-  if (!ADMIN_KEY) return;
-  poll(true);
-  pollLogs();
-}
+let ADMIN_KEY = "";
+const panels = {};
+let activeKey = null;
+
+const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const fmtClock = t => new Date(t * 1000).toLocaleTimeString();
+const fmtStamp = t => new Date(t * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
 
 function pctColor(pct) {
   if (pct >= 90) return { cls: "bad", bar: "bg-bad" };
   if (pct >= 70) return { cls: "warn", bar: "bg-warn" };
   return { cls: "ok", bar: "bg-ok" };
 }
-
 function fmtUptime(sec) {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
   return `up ${h}h ${m}m`;
 }
 
-function initChart() {
-  const ctx = document.getElementById("historyChart").getContext("2d");
-  chart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        { label: "CPU", data: [], borderColor: "#3d6bf5", tension: 0.3, pointRadius: 0 },
-        { label: "Memory", data: [], borderColor: "#3ddc84", tension: 0.3, pointRadius: 0 },
-        { label: "Swap", data: [], borderColor: "#f05d5d", tension: 0.3, pointRadius: 0 },
-      ]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: { min: 0, max: 100, ticks: { color: "#8b93a1" }, grid: { color: "#2a2e38" } },
-        x: { ticks: { color: "#8b93a1", maxTicksLimit: 8 }, grid: { display: false } }
+const KIND_LABEL = { crash: "CRASH", error: "ERROR", restart: "RESTART" };
+
+class Panel {
+  constructor(key, cfg) {
+    this.key = key; this.cfg = cfg;
+    this.data = null; this.chart = null;
+    this.windowMin = 30; this.lastLogTime = 0; this.selectedTs = null;
+    this.problemsOpen = new Set();
+    this.build();
+  }
+  $(id) { return document.getElementById(`${this.key}-${id}`); }
+
+  build() {
+    const k = this.key;
+    document.getElementById("tabs").insertAdjacentHTML("beforeend",
+      `<button class="tab" id="tab-${k}">${esc(this.cfg.title)}<span class="badge" id="${k}-badge"></span></button>`);
+    document.getElementById("tab-" + k).onclick = () => showPanel(k);
+
+    document.getElementById("panels").insertAdjacentHTML("beforeend", `
+    <section class="panel" id="panel-${k}">
+      <h1>${esc(this.cfg.title)} — Server Health<span class="status" id="${k}-status"></span></h1>
+      <p class="sub">Stats every 5s · Logs every 2s · <span id="${k}-uptime"></span></p>
+
+      <div id="${k}-swapOff" class="alert bg-bad"></div>
+      <div id="${k}-alert" class="alert bg-bad"></div>
+
+      <div class="grid">
+        <div class="card"><div class="label">CPU</div><div class="value" id="${k}-cpuVal">--%</div><div class="bar-bg"><div class="bar-fill" id="${k}-cpuBar"></div></div></div>
+        <div class="card"><div class="label">Memory</div><div class="value" id="${k}-memVal">--%</div><div class="sub-value" id="${k}-memSub"></div><div class="bar-bg"><div class="bar-fill" id="${k}-memBar"></div></div></div>
+        <div class="card"><div class="label">Swap</div><div class="value" id="${k}-swapVal">--%</div><div class="sub-value" id="${k}-swapSub"></div><div class="bar-bg"><div class="bar-fill" id="${k}-swapBar"></div></div></div>
+        <div class="card"><div class="label">Load Avg (1/5/15m)</div><div class="value" id="${k}-loadVal">--</div><div class="sub-value" id="${k}-loadSub"></div></div>
+      </div>
+
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <h3>CPU / Memory / Swap over time (%)</h3>
+          <label class="sub" style="margin:0">Time range
+            <select id="${k}-window">
+              <option value="15">15 min</option><option value="30" selected>30 min</option>
+              <option value="60">1 hour</option><option value="240">4 hours</option><option value="480">8 hours</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint">Click anywhere on the graph to see what caused that moment. Red triangles mark crashes and errors.</p>
+        <canvas id="${k}-chart" height="80"></canvas>
+        <div class="explain" id="${k}-explain"></div>
+      </div>
+
+      <div class="chart-wrap">
+        <h3>Crashes and errors (last 8 hours)</h3>
+        <div class="chips" id="${k}-pchips"></div>
+        <div id="${k}-ptable"></div>
+      </div>
+
+      <div class="chart-wrap">
+        <h3>Requests by endpoint (since restart)</h3>
+        <table><thead><tr><th>Endpoint</th><th>Requests</th></tr></thead><tbody id="${k}-endpoints"></tbody></table>
+      </div>
+
+      <div class="chart-wrap">
+        <h3>Live log (up to 8h scrollback)</h3>
+        <div class="logBox" id="${k}-log"></div>
+      </div>
+    </section>`);
+
+    this.$("window").onchange = e => { this.windowMin = +e.target.value; this.poll(); };
+    this.initChart();
+  }
+
+  initChart() {
+    const self = this;
+    // Draws a vertical line at the point the user clicked
+    const selectedLine = {
+      id: "selectedLine",
+      afterDatasetsDraw(chart) {
+        if (self.selectedTs == null || !self.data) return;
+        const idx = self.data.history.findIndex(h => h.timestamp === self.selectedTs);
+        if (idx < 0) return;
+        const x = chart.scales.x.getPixelForValue(idx);
+        const { top, bottom } = chart.chartArea;
+        const c = chart.ctx;
+        c.save(); c.strokeStyle = "rgba(230,232,235,.55)"; c.setLineDash([4, 4]);
+        c.beginPath(); c.moveTo(x, top); c.lineTo(x, bottom); c.stroke(); c.restore();
+      }
+    };
+    this.chart = new Chart(this.$("chart").getContext("2d"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [
+          { label: "CPU", data: [], borderColor: "#3d6bf5", tension: 0.3, pointRadius: 0, pointHoverRadius: 5 },
+          { label: "Memory", data: [], borderColor: "#3ddc84", tension: 0.3, pointRadius: 0, pointHoverRadius: 5 },
+          { label: "Swap", data: [], borderColor: "#f05d5d", tension: 0.3, pointRadius: 0, pointHoverRadius: 5 },
+          { label: "Crash / error", data: [], showLine: false, pointStyle: "triangle", pointRadius: 7,
+            borderColor: "#ff4d4d", backgroundColor: "#ff4d4d" },
+        ]
       },
-      plugins: { legend: { labels: { color: "#e6e8eb" } } }
+      options: {
+        responsive: true,
+        interaction: { mode: "index", intersect: false },
+        onClick: (evt, _els, chart) => {
+          const pts = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
+          if (pts.length) this.explain(pts[0].index);
+        },
+        scales: {
+          y: { min: 0, max: 100, ticks: { color: "#8b93a1" }, grid: { color: "#2a2e38" } },
+          x: { ticks: { color: "#8b93a1", maxTicksLimit: 8 }, grid: { display: false } }
+        },
+        plugins: { legend: { labels: { color: "#e6e8eb" } } }
+      },
+      plugins: [selectedLine]
+    });
+  }
+
+  async poll() {
+    try {
+      const res = await fetch(`${this.cfg.base}/admin/stats?key=${encodeURIComponent(ADMIN_KEY)}&window=${this.windowMin}`);
+      if (!res.ok) throw new Error(res.status === 401 ? "unauthorized" : "http " + res.status);
+      this.data = await res.json();
+      this.setStatus("", "");
+      this.render();
+      return true;
+    } catch (e) {
+      this.setStatus(e.message === "unauthorized" ? "wrong key for this server" : "can't reach server", "bad");
+      this.$("badge").textContent = "!";
+      return false;
     }
-  });
-}
+  }
 
-async function poll(isFirst) {
-  try {
-    const res = await fetch(`${API_BASE}/admin/stats?key=${encodeURIComponent(ADMIN_KEY)}`);
-    if (!res.ok) throw new Error("unauthorized");
-    const data = await res.json();
+  setStatus(text, cls) { const s = this.$("status"); s.textContent = text ? "· " + text : ""; s.className = "status " + cls; }
 
-    if (isFirst) {
-      document.getElementById("keyGate").style.display = "none";
-      document.getElementById("dashboard").style.display = "block";
-      initChart();
-    }
-
-    const c = data.current;
-
-    document.getElementById("uptime").textContent = fmtUptime(c.uptime_sec);
+  render() {
+    const d = this.data, c = d.current;
+    this.$("uptime").textContent = fmtUptime(c.uptime_sec);
 
     const cpu = pctColor(c.cpu_percent);
-    document.getElementById("cpuVal").textContent = c.cpu_percent.toFixed(0) + "%";
-    document.getElementById("cpuVal").className = "value " + cpu.cls;
-    document.getElementById("cpuBar").style.width = c.cpu_percent + "%";
-    document.getElementById("cpuBar").className = "bar-fill " + cpu.bar;
+    this.$("cpuVal").textContent = c.cpu_percent.toFixed(0) + "%";
+    this.$("cpuVal").className = "value " + cpu.cls;
+    this.$("cpuBar").style.width = c.cpu_percent + "%"; this.$("cpuBar").className = "bar-fill " + cpu.bar;
 
     const mem = pctColor(c.mem_percent);
-    document.getElementById("memVal").textContent = c.mem_percent.toFixed(0) + "%";
-    document.getElementById("memVal").className = "value " + mem.cls;
-    document.getElementById("memSub").textContent = `${c.mem_used_mb} / ${c.mem_total_mb} MB`;
-    document.getElementById("memBar").style.width = c.mem_percent + "%";
-    document.getElementById("memBar").className = "bar-fill " + mem.bar;
+    this.$("memVal").textContent = c.mem_percent.toFixed(0) + "%";
+    this.$("memVal").className = "value " + mem.cls;
+    this.$("memSub").textContent = `${c.mem_used_mb} / ${c.mem_total_mb} MB`;
+    this.$("memBar").style.width = c.mem_percent + "%"; this.$("memBar").className = "bar-fill " + mem.bar;
 
+    const swapOff = c.swap_total_mb === 0;
     const swap = pctColor(c.swap_percent);
-    document.getElementById("swapVal").textContent = c.swap_percent.toFixed(0) + "%";
-    document.getElementById("swapVal").className = "value " + swap.cls;
-    document.getElementById("swapSub").textContent = `${c.swap_used_mb} / ${c.swap_total_mb} MB`;
-    document.getElementById("swapBar").style.width = c.swap_percent + "%";
-    document.getElementById("swapBar").className = "bar-fill " + swap.bar;
+    this.$("swapVal").textContent = swapOff ? "OFF" : c.swap_percent.toFixed(0) + "%";
+    this.$("swapVal").className = "value " + (swapOff ? "bad" : swap.cls);
+    this.$("swapSub").textContent = swapOff ? "Swap is not enabled" : `${c.swap_used_mb} / ${c.swap_total_mb} MB`;
+    this.$("swapBar").style.width = (swapOff ? 0 : c.swap_percent) + "%"; this.$("swapBar").className = "bar-fill " + swap.bar;
+    const so = this.$("swapOff");
+    if (swapOff) {
+      so.className = "alert show bg-bad";
+      so.textContent = `Swap is NOT enabled on the ${this.cfg.title} server (${c.mem_total_mb} MB RAM). Audio processing can run out of memory and crash the app. Enable swap on the server.`;
+    } else so.className = "alert";
 
-    document.getElementById("loadVal").textContent = `${c.load1} / ${c.load5} / ${c.load15}`;
-    document.getElementById("loadSub").textContent = `${c.cpu_cores} cores — load above this = requests queuing`;
+    this.$("loadVal").textContent = `${c.load1} / ${c.load5} / ${c.load15}`;
+    this.$("loadSub").textContent = `${c.cpu_cores} cores: load above this means work is queuing`;
 
-    // Trend-based alert: is swap climbing steadily over the last ~1 min?
-    const hist = data.history;
-    const alertEl = document.getElementById("swapAlert");
-    if (hist.length >= 8) {
+    // Trend alert: swap climbing steadily
+    const hist = d.history, alertEl = this.$("alert");
+    alertEl.className = "alert";
+    if (!swapOff && hist.length >= 8) {
       const recent = hist.slice(-8);
       const rising = recent.every((h, i) => i === 0 || h.swap_used_mb >= recent[i - 1].swap_used_mb);
       const grew = recent[recent.length - 1].swap_used_mb - recent[0].swap_used_mb;
       if (rising && grew > 20) {
         alertEl.className = "alert show bg-bad";
-        alertEl.textContent = `⚠ Swap usage has climbed steadily for the last ~40s (+${grew}MB) — likely a processing backlog forming, not caught up yet.`;
+        alertEl.textContent = `Swap has climbed steadily over the recent samples (+${grew} MB): a processing backlog is likely forming.`;
       } else if (c.swap_percent > 85) {
         alertEl.className = "alert show bg-bad";
-        alertEl.textContent = `⚠ Swap is at ${c.swap_percent.toFixed(0)}% — box is under heavy memory pressure.`;
-      } else {
-        alertEl.className = "alert";
+        alertEl.textContent = `Swap is at ${c.swap_percent.toFixed(0)}%: heavy memory pressure.`;
       }
     }
 
-    // Chart update
-    chart.data.labels = hist.map(h => new Date(h.timestamp * 1000).toLocaleTimeString());
-    chart.data.datasets[0].data = hist.map(h => h.cpu_percent);
-    chart.data.datasets[1].data = hist.map(h => h.mem_percent);
-    chart.data.datasets[2].data = hist.map(h => h.swap_percent);
-    chart.update("none");
+    // Chart
+    const problemY = hist.map(() => null);
+    d.problems.forEach(p => {
+      const i = hist.findIndex(h => h.timestamp >= p.timestamp);
+      if (i >= 0 && p.timestamp >= (hist[0].t_start ?? hist[0].timestamp)) problemY[i] = 96;
+    });
+    this.chart.data.labels = hist.map(h => fmtClock(h.timestamp));
+    this.chart.data.datasets[0].data = hist.map(h => h.cpu_percent);
+    this.chart.data.datasets[1].data = hist.map(h => h.mem_percent);
+    this.chart.data.datasets[2].data = hist.map(h => h.swap_percent);
+    this.chart.data.datasets[3].data = problemY;
+    this.chart.update("none");
 
     // Endpoint table
-    const tbody = document.getElementById("endpointTable");
     const entries = Object.entries(c.requests_by_endpoint || {}).sort((a, b) => b[1] - a[1]);
-    tbody.innerHTML = entries.length
-      ? entries.map(([path, count]) => `<tr><td>${path}</td><td>${count}</td></tr>`).join("")
-      : `<tr><td colspan="2" style="color:var(--muted)">No requests recorded yet on this worker</td></tr>`;
+    this.$("endpoints").innerHTML = entries.length
+      ? entries.map(([p, n]) => `<tr><td>${esc(p)}</td><td>${n}</td></tr>`).join("")
+      : `<tr><td colspan="2" style="color:var(--muted)">No requests recorded yet</td></tr>`;
 
-    document.getElementById("gateError").style.display = "none";
-  } catch (e) {
-    if (isFirst) document.getElementById("gateError").style.display = "block";
+    this.renderProblems();
+    if (this.selectedTs != null) this.explainByTs(this.selectedTs, true);
+  }
+
+  // ── Explain a point on the graph ───────────────────────────────────────
+  explain(idx) {
+    const p = this.data.history[idx];
+    if (!p) return;
+    this.selectedTs = p.timestamp;
+    this.explainByTs(p.timestamp);
+    this.chart.update("none");
+  }
+
+  explainByTs(ts, quiet) {
+    const d = this.data, h = d.history;
+    const idx = h.findIndex(x => x.timestamp === ts);
+    const box = this.$("explain");
+    if (idx < 0) { if (quiet) { box.className = "explain"; } return; }
+    const p = h[idx], prev = h[idx - 1];
+    const t0 = p.t_start ?? (p.timestamp - 10);
+    const evs = d.events.filter(e => e.t > t0 - 5 && e.t <= p.timestamp + 0.5);
+    const n = kind => evs.filter(e => e.kind === kind);
+
+    // What moved
+    const moved = [];
+    if (prev) {
+      const chg = (label, a, b, min, unit) => { if (Math.abs(b - a) >= min) moved.push(`${label} ${a.toFixed(0)}${unit} → ${b.toFixed(0)}${unit}`); };
+      chg("CPU", prev.cpu_percent, p.cpu_percent, 10, "%");
+      chg("Memory", prev.mem_percent, p.mem_percent, 3, "%");
+      chg("Swap", prev.swap_used_mb, p.swap_used_mb, 10, " MB");
+    }
+    const headline = moved.length ? moved.join(" · ") : `CPU ${p.cpu_percent.toFixed(0)}% · Memory ${p.mem_percent.toFixed(0)}% · Swap ${p.swap_percent.toFixed(0)}%`;
+
+    // Causes
+    const why = [];
+    const crashes = n("crash"), restarts = n("restart"), errors = n("error");
+    if (crashes.length) why.push(`<b>Server crash</b> at ${fmtClock(crashes[0].t)}: numbers drop or reset because the process died and restarted.`);
+    if (restarts.length) why.push(`<b>Server restarted</b> at ${fmtClock(restarts[0].t)} (deploy or manual restart): numbers reset here.`);
+    if (errors.length) why.push(`<b>${errors.length} error${errors.length > 1 ? "s" : ""}</b>: ${esc(errors[0].msg.slice(0, 140))}${errors.length > 1 ? " (and more)" : ""}`);
+    if (n("new_call").length) why.push(`<b>${n("new_call").length} new call${n("new_call").length > 1 ? "s" : ""}</b> came in and were saved: each one runs transcription, parsing, and an audio upload.`);
+    if (n("radio").length) why.push(`<b>Radio audio was being processed</b> (${n("radio").length} step${n("radio").length > 1 ? "s" : ""}: capture, silence trim, transcription).`);
+    if (n("page_load").length) why.push(`<b>${n("page_load").length} page load${n("page_load").length > 1 ? "s" : ""}</b>: someone opened the site (fetches incidents, stats, and opens the live stream).`);
+    if (n("stream_open").length) why.push(`<b>${n("stream_open").length} live viewer${n("stream_open").length > 1 ? "s" : ""} connected</b> to the stream.`);
+    if (n("scroll_load").length) why.push(`<b>${n("scroll_load").length} older-incident load${n("scroll_load").length > 1 ? "s" : ""}</b> from someone scrolling down the feed.`);
+    if (n("stats_poll").length) why.push(`${n("stats_poll").length} background stats refresh${n("stats_poll").length > 1 ? "es" : ""} from open pages.`);
+    if (n("api_request").length) why.push(`${n("api_request").length} other API request${n("api_request").length > 1 ? "s" : ""}.`);
+    if (!why.length) why.push("No logged activity in this window. Most likely the background scanner, which continuously downloads the audio stream and converts it with ffmpeg.");
+
+    // Backed up?
+    const cores = d.current.cpu_cores || 1, backed = [];
+    if (p.load1 > cores) backed.push(`load average ${p.load1} is above ${cores} core${cores > 1 ? "s" : ""}, so work was queuing`);
+    if (idx >= 6 && p.swap_used_mb - h[idx - 6].swap_used_mb > 20) backed.push(`swap climbed +${p.swap_used_mb - h[idx - 6].swap_used_mb} MB over the previous minute`);
+    if (p.mem_percent >= 90) backed.push(`memory was at ${p.mem_percent.toFixed(0)}%`);
+
+    const span = (p.t_start != null && p.timestamp - p.t_start > 20)
+      ? `Covers ${fmtClock(p.t_start)} to ${fmtClock(p.timestamp)} (peak values). Pick a shorter time range for finer detail.`
+      : `Sampled at ${fmtClock(p.timestamp)}.`;
+
+    box.className = "explain show";
+    box.innerHTML = `<h4>${esc(headline)}</h4><div class="sub" style="margin:0 0 6px">${esc(span)}</div>
+      <div class="why-label">What was happening</div><ul>${why.map(w => `<li>${w}</li>`).join("")}</ul>
+      ${backed.length ? `<div class="why-label">Backed up</div><ul class="backed">${backed.map(b => `<li>${esc(b)}</li>`).join("")}</ul>`
+                      : `<div class="why-label">Backed up</div><div>No. The server was keeping up.</div>`}`;
+  }
+
+  // ── Crashes and errors ─────────────────────────────────────────────────
+  renderProblems() {
+    const list = this.data.problems;
+    const crashes = list.filter(p => p.kind === "crash").length;
+    const errors = list.filter(p => p.kind === "error").length;
+    const restarts = list.filter(p => p.kind === "restart").length;
+    this.$("badge").textContent = (crashes + errors) ? String(crashes + errors) : "";
+
+    this.$("pchips").innerHTML = `
+      <span class="chip ${crashes ? "bad" : "ok"}">${crashes} crash${crashes === 1 ? "" : "es"}</span>
+      <span class="chip ${errors ? "warn" : "ok"}">${errors} error${errors === 1 ? "" : "s"}</span>
+      <span class="chip">${restarts} restart${restarts === 1 ? "" : "s"}</span>`;
+
+    if (!list.length) { this.$("ptable").innerHTML = `<div class="empty-ok">No crashes, errors, or restarts in the last 8 hours.</div>`; return; }
+
+    const shown = list.slice(0, 100);
+    const rows = shown.map((p, i) => {
+      const id = `${p.kind}-${p.timestamp}-${i}`;
+      const open = this.problemsOpen.has(id);
+      let detail = "";
+      if (open) {
+        const s = p.ctx && p.ctx.sample;
+        const sys = s ? `CPU ${s.cpu_percent.toFixed(0)}% · Memory ${s.mem_percent.toFixed(0)}% · Swap ${s.swap_percent.toFixed(0)}% (${s.swap_used_mb}/${s.swap_total_mb} MB) · Load ${s.load1} on ${s.cpu_cores} core${s.cpu_cores > 1 ? "s" : ""}` : "not available";
+        const recent = (p.ctx && p.ctx.recent || []).map(r => `<div class="mono">${fmtClock(r.t)} [${esc(r.kind)}] ${esc(r.msg)}</div>`).join("");
+        detail = `<tr class="pdetail"><td></td><td colspan="3">
+          <div><b>Why:</b> ${esc(p.why || "No explanation recorded.")}</div>
+          <div><b>Server at the time:</b> ${esc(sys)}</div>
+          ${recent ? `<div><b>Activity in the 30s before:</b>${recent}</div>` : ""}
+          <div class="mono">Full message: ${esc(p.msg)}</div></td></tr>`;
+      }
+      return `<tr class="prow" tabindex="0" data-id="${esc(id)}">
+        <td style="white-space:nowrap">${fmtStamp(p.timestamp)}</td>
+        <td><span class="kind ${esc(p.kind)}">${KIND_LABEL[p.kind] || esc(p.kind)}</span></td>
+        <td>${esc(p.msg.slice(0, 160))}</td>
+        <td style="color:var(--muted)">${open ? "Hide" : "Why?"}</td></tr>${detail}`;
+    }).join("");
+
+    this.$("ptable").innerHTML = `<table><thead><tr><th>Time</th><th>Type</th><th>Message</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      ${list.length > 100 ? `<div class="more">Showing the newest 100 of ${list.length}.</div>` : ""}`;
+
+    this.$("ptable").querySelectorAll(".prow").forEach(tr => {
+      const toggle = () => {
+        const id = tr.dataset.id;
+        this.problemsOpen.has(id) ? this.problemsOpen.delete(id) : this.problemsOpen.add(id);
+        this.renderProblems();
+      };
+      tr.onclick = toggle;
+      tr.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } };
+    });
+  }
+
+  // ── Live log ───────────────────────────────────────────────────────────
+  async pollLogs() {
+    try {
+      const res = await fetch(`${this.cfg.base}/admin/logs?key=${encodeURIComponent(ADMIN_KEY)}&since=${this.lastLogTime}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.entries.length) return;
+      const box = this.$("log");
+      const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 20;
+      data.entries.forEach(e => {
+        const line = document.createElement("div");
+        line.className = "k-" + e.kind;
+        line.innerHTML = `<span class="ts">${fmtClock(e.timestamp)}</span>${esc(e.msg)}`;
+        box.appendChild(line);
+      });
+      while (box.children.length > 1500) box.removeChild(box.firstChild);
+      this.lastLogTime = data.entries[data.entries.length - 1].timestamp;
+      if (atBottom) box.scrollTop = box.scrollHeight;
+    } catch (e) {}
   }
 }
 
-async function pollLogs() {
-  try {
-    const res = await fetch(`${API_BASE}/admin/logs?key=${encodeURIComponent(ADMIN_KEY)}&since=${lastLogTime}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (!data.entries.length) return;
-
-    const box = document.getElementById("logBox");
-    const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 20;
-
-    data.entries.forEach(e => {
-      const line = document.createElement("div");
-      const t = new Date(e.timestamp * 1000).toLocaleTimeString();
-      line.innerHTML = `<span class="ts">${t}</span>${e.msg}`;
-      box.appendChild(line);
-    });
-    lastLogTime = data.entries[data.entries.length - 1].timestamp;
-
-    if (atBottom) box.scrollTop = box.scrollHeight;
-  } catch (e) {}
+function showPanel(key) {
+  activeKey = key;
+  Object.keys(panels).forEach(k => {
+    document.getElementById("panel-" + k).classList.toggle("active", k === key);
+    document.getElementById("tab-" + k).classList.toggle("active", k === key);
+  });
+  panels[key].chart.resize();
 }
 
-setInterval(() => { if (ADMIN_KEY) poll(false); }, 5000);
-setInterval(() => { if (ADMIN_KEY) pollLogs(); }, 2000);
+async function saveKeyAndStart() {
+  ADMIN_KEY = document.getElementById("keyInput").value.trim();
+  if (!ADMIN_KEY) return;
+  if (!Object.keys(panels).length) {
+    Object.entries(SERVICES).forEach(([k, cfg]) => { panels[k] = new Panel(k, cfg); });
+  }
+  const results = await Promise.all(Object.values(panels).map(p => p.poll()));
+  if (results.some(Boolean)) {
+    document.getElementById("keyGate").style.display = "none";
+    document.getElementById("dashboard").style.display = "block";
+    showPanel(activeKey || Object.keys(panels)[0]);
+  } else {
+    document.getElementById("gateError").style.display = "block";
+  }
+}
+document.getElementById("keyInput").addEventListener("keydown", e => { if (e.key === "Enter") saveKeyAndStart(); });
+
+setInterval(() => { if (ADMIN_KEY) Object.values(panels).forEach(p => p.poll()); }, 5000);
+setInterval(() => { if (ADMIN_KEY && activeKey) panels[activeKey].pollLogs(); }, 2000);
 </script>
 </body>
 </html>
