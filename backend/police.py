@@ -124,7 +124,7 @@ def get_stats():
 
 
 # ─────────────────────────────────────────────
-# Capture — curl-subprocess (bypasses Broadcastify's TLS-fingerprint block
+# Capture — curl-subprocess (bypasses Broadcast TLS-fingerprint block
 # on Python's requests/urllib3) + polling to build up a full-length chunk
 # ─────────────────────────────────────────────
 
@@ -150,7 +150,7 @@ def fetch_playlist() -> list[str]:
 
 def download_segments(min_seconds: int = CHUNK_SECONDS) -> bytes:
     """
-    Broadcastify's live playlist only ever lists a handful of segments at once
+    Broadcast audio live playlist only ever lists a handful of segments at once
     (a rolling window, e.g. 6 segments ≈ 24s) — it does NOT grow to expose
     min_seconds worth of history just because we ask for more. To actually
     accumulate min_seconds of audio, we poll the playlist repeatedly over
