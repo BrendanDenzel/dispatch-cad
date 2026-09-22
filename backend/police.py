@@ -16,7 +16,7 @@ SUPABASE_KEY   = os.environ.get("SUPABASE_KEY")
 STREAM_URL     = os.environ.get("STREAM_URL")   # .m3u8 playlist URL
 CHUNK_SECONDS  = 120    # target seconds of actual audio per captured chunk
 SEG_DURATION   = 4.032 # seconds per HLS segment, from the playlist's #EXTINF value
-MAX_INCIDENTS  = 5000
+MAX_INCIDENTS  = 3500
 AUDIO_BUCKET   = "audio-clips"
 
 EASTERN     = ZoneInfo("America/New_York")
