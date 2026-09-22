@@ -85,6 +85,8 @@
   .logBox .ts { color: var(--muted); margin-right: 8px; }
   .logBox .k-error, .logBox .k-crash { color: var(--bad); }
   .logBox .k-new_call { color: var(--ok); }
+
+  .mono { font-family: ui-monospace, Menlo, monospace; }
 </style>
 </head>
 <body>
@@ -461,20 +463,369 @@ class Panel {
   }
 }
 
+// showPanel is generalized (vs. only looping over Object.keys(panels)) so
+// that non-Panel tabs — like the Filtered Calls tab added below — can also
+// be switched to/from without needing their own copy of this function.
+// Behavior for the existing Fire CAD / Police CAD tabs is unchanged.
 function showPanel(key) {
   activeKey = key;
-  Object.keys(panels).forEach(k => {
-    document.getElementById("panel-" + k).classList.toggle("active", k === key);
-    document.getElementById("tab-" + k).classList.toggle("active", k === key);
-  });
-  panels[key].chart.resize();
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  const tabEl = document.getElementById('tab-' + key);
+  const panelEl = document.getElementById('panel-' + key);
+  if (tabEl) tabEl.classList.add('active');
+  if (panelEl) panelEl.classList.add('active');
+  if (panels[key] && panels[key].chart) panels[key].chart.resize();
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// FILTERED CALLS TAB
+//
+// Completely independent of fire.html: it fetches straight from the same
+// public Fire CAD incidents API fire.html itself reads (no admin key
+// needed for that endpoint), and re-runs, locally, the one rule fire.html
+// uses to hide calls from the board — "an earlier call at a near-identical
+// address happened within the last 30 minutes" (isDuplicateAddress in
+// fire.html). Anything that rule would hide gets listed here instead,
+// along with its Supabase id, so you can go delete the noisy one from the
+// backend. This never touches fire.html, imports nothing from it, and
+// running/using this tab has zero effect on what the fire board displays.
+// ════════════════════════════════════════════════════════════════════════
+(function () {
+  const FC_API = "https://firecad.duckdns.org/fire/incidents";
+  const FC_DUP_WINDOW_MS = 30 * 60 * 1000; // mirrors fire.html's isDuplicateAddress window
+
+  // ── Copied verbatim from fire.html so address/department normalization
+  // matches exactly what fire.html itself would compute. ──────────────────
+  const FC_KEYWORD_BANK = {
+    "struck the road": "Strickler Road", "strickler road": "Strickler Road",
+    "creton drive": "Creeton Drive", "edgar road": "Eggert Road", "edgar": "Eggert",
+    "APT": "APD", "APZ": "APD", "tigers": "Eggertsville", "sam hushfire": "Amherst Fire",
+    "eggers": "Eggertsville", "eggersville": "Eggertsville", "letter": "Ladder",
+    "and press to fire": "Amherst Fire", "MS": "EMS", "new steady": "Newstead",
+    "new study": "Newstead", "Amor's": "Amherst", "Amores": "Amherst", "Amateur": "Amherst",
+    "Williams Village": "Williamsville", "dollars": "hours", "Cam Hurst": "Amherst",
+    "newsletter": "Newstead", "niamas": "EMS", "in the amoska": "EMS call",
+    "back on": "Akron", "an ALS": "EMS", "AMS": "EMS", "East Yammer's": "East Amherst",
+    "Yammer's": "Amherst", "Cutthole": "Getzville", "EMC": "ECMC", "LMS": "EMS",
+    "guest": "Getzville", "MOS": "EMS", "Getzfella": "Getzville", "Getzfella's": "Getzville",
+    "yamash": "EMS", "fair": "Fire", "Yes, William": "Getzville", "I'll call": "EMS call",
+    "fireline": "fire alarm", "Skepsula": "Getsville", "amar tire": "Amherst Fire",
+    "Amos": "Amherst", "Schutzele and Amosco": "Getzville EMS", "slayer": "Fire",
+    "Amorous": "Amherst", "Colt": "Cold", "Eggert's phone": "Eggertsville", "DMS": "EMS",
+    "CMS": "EMS", "Terminal": "Timeout", "Elka Creek": "Ellicott Creek",
+    "port to your": "report to your", "get still": "Getzville", "sue said": "Newstead",
+    "sue said I": "Newstead", "new stata": "Newstead", "AMHR": "Amherst", "Aversa": "Amherst",
+    "Guzzle": "Getzville", "Duftsville": "Getzville", "get full": "Getzville",
+    "vestalo": "Getzville", "orica": "Ellicott", "amarst": "Amherst", "9S": "95",
+    "six-tie": "65", "I'm a soul": "Williamsville", "whitezilla": "Williamsville",
+    "Paris": "Terrace", "sixth side": "65", "Sweetwood": "Fleetwood",
+    "in her fire": "Amherst Fire", "smyter": "Snyder", "smeider": "Snyder",
+    "sneider": "Snyder", "now has fire": "Amherst Fire", "amherst fire": "Amherst Fire",
+    "side area": "Snyder", "amortize": "Amherst", "GFL": "Getzville", "EMF": "EMS",
+    "north front": "North French", "shroves": "road", "shrove": "road",
+    "box berline": "Larkspur", "Larkes, Berlin": "Larkspur", "Beggartsville": "Eggertsville",
+    "Packardsville": "Eggertsville", "Allenhurst Fire": "Amherst Fire", "Snider": "Snyder",
+    "topps": "Tops", "Tameric": "Amherst", "East Tamer": "East Amherst",
+    "Damhurst": "Amherst", "Rowe Road": "Roll Road", "Windows 0A": "Williamsville",
+    "firearm": "fire alarm", "LLM": "Alarm", "assault attack": "smoke detector",
+    "clearance": "Clarence", "Romansville": "Bowmansville", "reach your aid": "mutual aid",
+    "transroad": "Transit Road", "Salvatoris": "Salvatore's", "Salvatores": "Salvatore's",
+    "Amperous": "Amherst", "Matrice": "Main Transit", "transit": "Transit",
+    "blot hill tech": "La Tolteca", "a more vehicle accident": "a motor vehicle accident",
+    "lotto tuckup": "La Tolteca", "Regasville": "Getzville", "natural aid": "mutual aid",
+    "Harrisville": "Harris Hill", "Bowman's Hill": "Bowmansville",
+    "I look at crete": "Ellicott Creek", "I'll look at crete": "Ellicott Creek",
+    "I look at creet": "Ellicott Creek", "I'll look at creet": "Ellicott Creek",
+    "I look at creek": "Ellicott Creek", "I'll look at creek": "Ellicott Creek",
+    "I have a little future": "having a seizure", "Formallly": "Swormville",
+    "1-B-L": "Swormville", "Townline": "Tonawanda", "Tonauna": "Tonawanda",
+    "king west, balinger": "Westphalinger", "queen west challenger": "Westphalinger",
+    "and report": "Amherst Fire", "Recyclico": "Eggertsville", "Aggersol": "Eggertsville",
+    "Aggersville": "Eggertsville", "trust me": "chest pain", "MF": "EMS",
+    "I guess we'll do": "Eggertsville", "I guess we'll": "Eggertsville",
+    "I heard phil": "Eggertsville", "I consider": "Eggertsville",
+    "I consider a": "Eggertsville", "spider": "Snyder", "Sennheiser": "Snyder",
+    "q-mail": "female", "q mail": "female", "qmail": "female",
+    "I could sell": "Eggertsville", "dettsville": "Getzville", "jetsville": "Getzville",
+    "saratel": "Harris Hill", "sarousel": "Harris Hill", "sharmorville": "Shimerville",
+    "gottsville": "Getzville", "alleyca": "Ellicott", "elecate": "Ellicott",
+    "I'm harsh fire": "Amherst Fire", "Amherst Clare": "Amherst Fire",
+    "Detzel": "Getzville", "Getsl": "Getzville", "Torneville": "Swormville",
+    "Tornville": "Swormville", "Swarmville": "Swormville", "scott's bell": "Getzville",
+    "scotts bell": "Getzville", "scottsville": "Getzville", "sider": "Snyder",
+    "NEMS": "and EMS", "indiana, muscle": "Clarence an EMS",
+    "this is sam hurston": "East Amherst", "MLS": "EMS", "form vill": "Swormville",
+    "form villean": "Swormville an", "form bill": "Swormville",
+    "Alica Creek": "Ellicott Creek", "Alica": "Ellicott", "Alika": "Ellicott",
+    "Alika Creek": "Ellicott Creek", "swarm bill": "Swormville", "eccreak": "Ellicott Creek",
+    "eccreek": "Ellicott Creek", "caratel": "Harris Hill", "carousel": "Harris Hill",
+    "sam hurst fire": "Amherst Fire", "sam hurst, fire": "Amherst Fire",
+    "may transit": "Main Transit", "amherst, fire": "Amherst Fire",
+    "bellica creek": "Ellicott Creek", "bellica": "Ellicott", "amherst drive": "Amherst Fire",
+    "gatsville": "Getzville", "NAMS": "an EMS", "wimbledon": "Williamsville",
+    "wimbleton": "Williamsville", "east amar": "East Amherst",
+    "amherst to fire": "Amherst Fire", "aggersola": "Eggertsville", "Williams": "Williamsville",
+    "williams william": "Williamsville", "williams williams": "Williamsville",
+    "accra": "Akron", "accra and a": "Akron a", "claren": "Clarence", "tms": "EMS",
+    "carl": "call", "aggressville": "Eggertsville", "aggressol": "Eggertsville",
+    "emerson": "Amherst Fire", "gas well": "Getzville", "gas will": "Getzville",
+    "new city": "Newstead", "and required": "Amherst Fire", "Aggressively": "Eggertsville",
+    "mescal": "EMS call", "messcal": "EMS call", "chesapean": "chest pain",
+    "i'm sorry": "Amherst Fire", "clear and center": "Clarence Center",
+    "air air air": "Amherst Fire", "sniper": "Snyder", "ema": "EMS",
+    "apoxo": "possible ", "swarnville": "Swormville", "form of": "Swormville",
+    "samhurst": "East Amherst", "total breathing": "trouble breathing",
+    "i'm hurst fire": "Amherst Fire", "swim hill": "Swormville", "m.s": "EMS",
+    "e.a": "EMS", "clare": "Clarence", "musco": "call", "air force": "Amherst",
+    "swormlight": "Swormville", "swamberloney": "Swormville", "swarmillenia": "Swormville",
+    "m.r.s": "EMS", "amherst 5": "Amherst Fire", "multi-tector": "smoke detector",
+    "may transfer": "Main Transit", "LNEMS": "EMS", "at merce fire": "Amherst Fire",
+    "Eggertville": "Eggertsville", "allison creek": "Ellicott Creek",
+    "Iversville": "Eggertsville", "parasitell": "Harris Hill", "trader road": "Transit Road",
+    "moosecad": "Newstead", "blaine's": "Williamsville", "scott phil": "Getzville",
+    "gasoline": "Getzville", "alka creek": "Ellicott Creek", "elkid creek": "Ellicott Creek",
+    "formville": "Swormville", "That's the EMS call": "Getzville EMS call",
+    "That's still an EMS call": "Getzville EMS call", "fire center": "Clarence Center",
+    "2nd side": "Clarence Center", "getsville": "Getzville", "gasol": "Getzville",
+    "I heard EMS call": "Snyder EMS call", "amherst clair": "Amherst Fire",
+    "amnesty": "Amherst Fire", "swanville": "Swormville", "alakea creek": "Ellicott Creek",
+    "me as must": "EMS", "news, send": "Newstead", "news send": "Newstead",
+    "news said": "Newstead", "news, said": "Newstead", "NMS": "EMS",
+    "linus": "Williamsville", "tetzel": "Getzville", "guts la": "Getzville",
+    "wazel": "Williamsville", "wizzle": "Williamsville", "airstar": "Amherst",
+    "allocation": "on location", "amars": "Amherst", "control": "Clarence",
+    "amel": "Amherst", "guts missile": "Getzville", "east sammer": "East Amherst",
+    "east danvers": "East Amherst", "amherst flair": "Amherst Fire",
+    "indy, moscow": "an EMS call", "in a mask call": "an EMS call", "emi": "EMS",
+    "eggerthville": "Eggertsville", "aggress flow": "Eggertsville", "eggert": "Eggertsville",
+    "new sydney": "Newstead", "samhearst": "Amherst", "samherst": "Amherst",
+    "news at": "Newstead", "amherst, sorry": "Amherst Fire", "lane transit": "Main Transit",
+    "mane": "Main", "sidery": "Snyder", "All right, we itch": "",
+    "slonville": "Swormville", "Town Alana Creek Road": "Tonawanda Creek Road"
+  };
+
+  const FC_DEPARTMENT_LIST = [
+    { label: "East Amherst FD",   aliases: ["East Amherst"] },
+    { label: "Eggertsville FD",   aliases: ["Eggertsville"] },
+    { label: "Getzville FD",      aliases: ["Getzville"] },
+    { label: "Williamsville FD",  aliases: ["Williamsville", "Hutchinson Hose", "Hutchinson"] },
+    { label: "Swormville FD",    aliases: ["Swormville"] },
+    { label: "Harris Hill FD",    aliases: ["Harris Hill"] },
+    { label: "Newstead FD",       aliases: ["Newstead"] },
+    { label: "Clarence Center FD", aliases: ["Clarence Center"] },
+    { label: "Clarence FD",       aliases: ["Clarence"], excludeAfter: ["Center"] },
+    { label: "Akron FD",          aliases: ["Akron"] },
+    { label: "Snyder FD",         aliases: ["Snyder"] },
+    { label: "Main Transit FD",   aliases: ["Main Transit"] },
+    { label: "Ellicott Creek FD", aliases: ["Ellicott Creek"] },
+    { label: "Rapids Fire FD", aliases: ["Rapids Fire", "Rapid Fire", "Rapid", "Rapids"], excludeAfter: ["Road","heart","rate", "Rd"] },
+    { label: "North Amherst FD",  aliases: ["North Amherst"] },
+    { label: "North Bailey FD",   aliases: ["North Bailey", "Bailey"], excludeAfter: ["Avenue", "Ave","quality"] },
+  ];
+
+  function fcApplyKeywordBank(text) {
+    if (!text) return text;
+    let out = text;
+    for (const wrong in FC_KEYWORD_BANK) {
+      const right = FC_KEYWORD_BANK[wrong];
+      const escaped = wrong.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`\\b${escaped}\\b`, 'gi');
+      out = out.replace(re, right);
+    }
+    return out;
+  }
+  function fcCollapseNumberDashes(text) {
+    if (!text) return text;
+    return text.replace(/\b(\d+)\s*-\s*(\d+)\b/g, '$1$2');
+  }
+  function fcNormalizeLocationText(text) {
+    return fcCollapseNumberDashes(fcApplyKeywordBank(text || ''));
+  }
+  function fcFuzzyAddressKey(loc) {
+    return loc.split(/\s+/).map(w => w.replace(/'s$/i, '').replace(/s$/i, '')).join(' ');
+  }
+  function fcGetIncidentTimeMs(inc) {
+    return inc.created_at ? new Date(inc.created_at).getTime() : Date.now();
+  }
+  function fcFindDepartmentInText(rawText) {
+    if (!rawText) return null;
+    const text = fcApplyKeywordBank(String(rawText));
+    let earliestIndex = Infinity, earliestLabel = null;
+    for (const dept of FC_DEPARTMENT_LIST) {
+      for (const alias of dept.aliases) {
+        const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        let pattern = `\\b${escaped}\\b`;
+        if (dept.excludeAfter && dept.excludeAfter.length) {
+          const excl = dept.excludeAfter.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+          pattern += `(?!\\s+(?:${excl})\\b)`;
+        }
+        const re = new RegExp(pattern, 'i');
+        const m = re.exec(text);
+        if (m && m.index < earliestIndex) { earliestIndex = m.index; earliestLabel = dept.label; }
+      }
+    }
+    return earliestLabel;
+  }
+  // Simplified vs. fire.html's getStationLabel: skips the "strip responding
+  // lines before the location line" transcript trick, since this is just
+  // for a human-readable hint here, not for the actual suppression logic
+  // (that part — the address dedup — is replicated exactly).
+  function fcGetDept(inc) {
+    if (inc.tone_dept && inc.tone_dept.includes(',')) {
+      const parts = inc.tone_dept.split(',').map(p => fcFindDepartmentInText(p)).filter(Boolean);
+      if (parts.length) return [...new Set(parts)].join(', ');
+    }
+    const tone = inc.tone_dept ? fcFindDepartmentInText(inc.tone_dept) : null;
+    const transcript = fcFindDepartmentInText(inc.transcript) || fcFindDepartmentInText(inc.notes);
+    if (tone && transcript && tone !== transcript) return `${tone} / ${transcript}?`;
+    return tone || transcript || 'Unclear';
+  }
+  function fcFmtTime(inc) {
+    if (inc.time_str) return inc.time_str;
+    if (!inc.created_at) return '';
+    return new Date(inc.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  }
+
+  let fcOffset = 0;
+  let fcAllLoaded = false;
+  let fcLoading = false;
+  let fcStarted = false;
+  let fcKnownIds = new Set();
+  let fcAddressLastShown = {};   // key -> ms, mirrors fire.html's dedup memory
+  let fcAddressLastMeta  = {};   // key -> {id, incident_type, time_str} of the call that "won"
+  let fcScanned = 0;
+  let fcSuppressed = [];         // [{ inc, by }] — calls fire.html hides
+
+  function fcBuildUI() {
+    document.getElementById("tabs").insertAdjacentHTML("beforeend",
+      `<button class="tab" id="tab-filtered">Fire Filtered Calls<span class="badge" id="filtered-badge"></span></button>`);
+    document.getElementById("tab-filtered").onclick = () => {
+      showPanel("filtered");
+      if (!fcStarted) { fcStarted = true; fcLoadMore(); }
+    };
+
+    document.getElementById("panels").insertAdjacentHTML("beforeend", `
+    <section class="panel" id="panel-filtered">
+      <h1>Fire Filtered Calls<span class="status" id="filtered-status"></span></h1>
+      <p class="sub">Calls the Fire CAD board never shows, because an earlier call at a near-identical address happened within 30 minutes. Reads the public incidents API directly — independent of fire.html, has no effect on it.</p>
+
+      <div class="grid">
+        <div class="card"><div class="label">Raw Calls Scanned</div><div class="value" id="filtered-scanned">0</div></div>
+        <div class="card"><div class="label">Filtered Out</div><div class="value bad" id="filtered-count">0</div></div>
+      </div>
+
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <h3>Suppressed calls</h3>
+          <button id="filtered-loadmore">Load next 50 raw calls</button>
+        </div>
+        <p class="hint">Department is a best-effort guess from the transcript/notes — use the Supabase ID as the source of truth. Copy that ID and delete it in the backend to stop that address from re-triggering the filter.</p>
+        <div id="filtered-table"></div>
+        <div class="more" id="filtered-more"></div>
+      </div>
+    </section>`);
+
+    document.getElementById("filtered-loadmore").onclick = fcLoadMore;
+  }
+
+  function fcRenderRow(inc, by) {
+    const notesOrTx = inc.notes || inc.transcript || "";
+    const desc = notesOrTx ? esc(fcApplyKeywordBank(notesOrTx).slice(0, 220)) : `<span style="color:var(--muted)">—</span>`;
+    const addr = esc(fcNormalizeLocationText(inc.location || "") || "Unknown");
+    const dept = esc(fcGetDept(inc));
+    const type = esc(inc.incident_type || "Unknown");
+    const t = esc(fcFmtTime(inc));
+    const byLine = by
+      ? `<div class="mono" style="color:var(--muted);margin-top:4px">kept call: ID ${esc(String(by.id))} "${esc(by.incident_type || "")}" @ ${esc(by.time_str || "")}</div>`
+      : "";
+    return `<tr>
+      <td class="mono">${esc(String(inc.id))}</td>
+      <td>${type}</td>
+      <td>${dept}</td>
+      <td>${addr}</td>
+      <td style="max-width:320px">${desc}${byLine}</td>
+      <td style="white-space:nowrap;color:var(--muted)">${t}</td>
+    </tr>`;
+  }
+
+  function fcRender() {
+    document.getElementById("filtered-scanned").textContent = fcScanned;
+    document.getElementById("filtered-count").textContent = fcSuppressed.length;
+    document.getElementById("filtered-badge").textContent = fcSuppressed.length ? String(fcSuppressed.length) : "";
+
+    const wrap = document.getElementById("filtered-table");
+    if (!fcSuppressed.length) {
+      wrap.innerHTML = `<div class="empty-ok">No suppressed calls found in what's been scanned yet.</div>`;
+    } else {
+      const rows = fcSuppressed.map(x => fcRenderRow(x.inc, x.by)).reverse().join("");
+      wrap.innerHTML = `<table><thead><tr><th>ID</th><th>Type</th><th>Dept (guess)</th><th>Address</th><th>Notes / Transcript</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+    const moreEl = document.getElementById("filtered-more");
+    const btn = document.getElementById("filtered-loadmore");
+    if (fcAllLoaded) { moreEl.textContent = "All available calls scanned."; btn.disabled = true; }
+    else { moreEl.textContent = ""; btn.disabled = false; }
+  }
+
+  async function fcLoadMore() {
+    if (fcLoading || fcAllLoaded) return;
+    fcLoading = true;
+    const btn = document.getElementById("filtered-loadmore");
+    const statusEl = document.getElementById("filtered-status");
+    btn.textContent = "Loading…";
+    try {
+      const res = await fetch(`${FC_API}?offset=${fcOffset}`);
+      if (!res.ok) throw new Error("http " + res.status);
+      const batch = await res.json();
+      statusEl.textContent = ""; statusEl.className = "status";
+
+      if (!batch.length) {
+        fcAllLoaded = true;
+      } else {
+        const unseen = batch.filter(i => !fcKnownIds.has(String(i.id)));
+        unseen.forEach(i => fcKnownIds.add(String(i.id)));
+        fcScanned += unseen.length;
+
+        // Same ordering fire.html uses when it decides duplicates: oldest
+        // first within the page, so the earliest call at an address always
+        // "wins" and later ones at the same address get flagged.
+        [...unseen]
+          .sort((a, b) => fcGetIncidentTimeMs(a) - fcGetIncidentTimeMs(b))
+          .forEach(inc => {
+            const loc = fcNormalizeLocationText(inc.location || "").trim().toLowerCase();
+            if (!loc) return; // fire.html never dedups calls with no location
+            const key = fcFuzzyAddressKey(loc);
+            const t = fcGetIncidentTimeMs(inc);
+            const last = fcAddressLastShown[key];
+            if (last !== undefined && Math.abs(t - last) <= FC_DUP_WINDOW_MS) {
+              fcSuppressed.push({ inc, by: fcAddressLastMeta[key] });
+            } else {
+              fcAddressLastShown[key] = t;
+              fcAddressLastMeta[key] = { id: inc.id, incident_type: inc.incident_type, time_str: inc.time_str };
+            }
+          });
+
+        if (batch.length < 50) fcAllLoaded = true;
+        else fcOffset += 50;
+      }
+      fcRender();
+    } catch (e) {
+      statusEl.textContent = "· can't reach fire API";
+      statusEl.className = "status bad";
+    }
+    fcLoading = false;
+    btn.textContent = "Load next 50 raw calls";
+  }
+
+  window.fcBuildUI = fcBuildUI;
+})();
 
 async function saveKeyAndStart() {
   ADMIN_KEY = document.getElementById("keyInput").value.trim();
   if (!ADMIN_KEY) return;
   if (!Object.keys(panels).length) {
     Object.entries(SERVICES).forEach(([k, cfg]) => { panels[k] = new Panel(k, cfg); });
+    fcBuildUI();
   }
   const results = await Promise.all(Object.values(panels).map(p => p.poll()));
   if (results.some(Boolean)) {
