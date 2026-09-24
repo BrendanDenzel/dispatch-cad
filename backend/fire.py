@@ -186,7 +186,7 @@ FIRE_AUDIO_PREFIX  = "fire_clips"      # same AUDIO_BUCKET, separate folder from
 FIRE_INCIDENT_TABLE = "fire_incidents"
 FIRE_LOG_TABLE       = "fire_radio_log"
 GEOCODE_CACHE_TABLE  = "geocode_cache"   # server-side cache of resolved map coordinates
-FIRE_SEG_SILENCE_DB      = -40.0  # ffmpeg mean_volume threshold; segments quieter than this = silence
+FIRE_SEG_SILENCE_DB      = -25.0  # ffmpeg mean_volume threshold; segments quieter than this = silence
 FIRE_PREROLL_SEGMENTS    = 1      # keep this many segments (~4s) buffered before a trigger, so we don't clip the start of a call
 FIRE_HANGOVER_SEGMENTS   = 3      # end capture after this many consecutive silent segments (~4s of quiet)
 FIRE_MAX_CLIP_SEGMENTS   = 15     # safety cap (~60s) in case a call/noise never goes quiet
@@ -211,9 +211,15 @@ _fire_recent_calls_lock = threading.Lock()
 _fire_concurrency_pool = ThreadPoolExecutor(max_workers=2)
 
 def fire_segment_mean_volume_db(seg_bytes: bytes) -> float:
-    """Returns the mean volume (dB) of a single ~4s TS segment via ffmpeg's
-    volumedetect filter. Used as the voice-activity trigger — cheap enough
-    to run on every segment as it arrives."""
+    """Returns the PEAK volume (dB) of a single TS segment via ffmpeg's
+    volumedetect filter. Used as the voice-activity trigger.
+
+    NOTE: uses max_volume, not mean_volume. mean_volume dilutes short
+    bursts of speech across the whole segment window — with segments now
+    ~8s (was ~4s), a 2s transmission barely nudges the average, so it
+    stopped crossing threshold. max_volume (peak) is duration-invariant:
+    a short loud burst still registers at full peak regardless of how
+    much silence surrounds it in the segment."""
     if not seg_bytes:
         return -99.0
     with tempfile.NamedTemporaryFile(suffix=".ts", delete=False) as f:
@@ -225,8 +231,8 @@ def fire_segment_mean_volume_db(seg_bytes: bytes) -> float:
             capture_output=True, text=True, timeout=30
         )
         for line in result.stderr.splitlines():
-            if "mean_volume:" in line:
-                return float(line.split("mean_volume:")[1].strip().split(" ")[0])
+            if "max_volume:" in line:
+                return float(line.split("max_volume:")[1].strip().split(" ")[0])
         return -99.0
     except Exception as e:
         print(f"[fire-vad] volume check failed: {e}", flush=True)
