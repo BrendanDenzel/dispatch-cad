@@ -15,7 +15,7 @@ GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL   = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY   = os.environ.get("SUPABASE_KEY")
 STREAM_URL     = os.environ.get("STREAM_URL")   # fire/EMS .m3u8 playlist URL
-SEG_DURATION   = 4.032 # seconds per HLS segment, from the playlist's #EXTINF value
+SEG_DURATION   = 8.034 # seconds per HLS segment, from the playlist's #EXTINF value
 AUDIO_BUCKET   = "audio-clips"
 
 EASTERN     = ZoneInfo("America/New_York")
@@ -411,6 +411,7 @@ def fire_scanner_loop():
             continue
 
         new_segments = [s for s in segments if s not in seen_set]
+        print(f"[fire-scanner] playlist check: {len(segments)} total, {len(new_segments)} new", flush=True)
         if not new_segments:
             time.sleep(SEG_DURATION)
             continue
@@ -430,6 +431,7 @@ def fire_scanner_loop():
                 vol_db = fire_segment_mean_volume_db(seg_bytes)
                 has_audio = vol_db > FIRE_SEG_SILENCE_DB
                 last_has_audio = has_audio
+                print(f"[fire-scanner] seg#{seg_counter} vol={vol_db:.1f}dB has_audio={has_audio}", flush=True)
             else:
                 has_audio = last_has_audio  # reuse last check, skip spawning ffmpeg this round
 
