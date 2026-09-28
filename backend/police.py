@@ -130,7 +130,10 @@ def get_stats():
 
 def curl_fetch(url: str) -> bytes:
     result = subprocess.run(
-        ["curl", "-sS", "-f", "--max-time", "15", url],
+        ["curl", "-sS", "-f", "--max-time", "15",
+         "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+               "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+         url],
         capture_output=True,
     )
     if result.returncode != 0:
