@@ -128,14 +128,28 @@ def get_stats():
 # on Python's requests/urllib3) + polling to build up a full-length chunk
 # ─────────────────────────────────────────────
 
+BROWSER_UA = ("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36")
+
 def curl_fetch(url: str) -> bytes:
-    result = subprocess.run(
-        ["curl", "-sS", "-f", "--max-time", "15",
-         "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-               "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-         url],
-        capture_output=True,
-    )
+    cmd = [
+        "curl", "-sS", "-f", "--max-time", "15",
+        "-A", BROWSER_UA,
+        "-H", "accept: */*",
+        "-H", "accept-language: en-US,en;q=0.9",
+        "-H", f"referer: {STREAM_URL}",
+        "-H", "sec-fetch-dest: video",
+        "-H", "sec-fetch-mode: cors",
+        "-H", "sec-fetch-site: same-origin",
+    ]
+    if url.split("?")[0].endswith(".ts"):
+        cmd += ["-H", "range: bytes=0-"]
+    cmd.append(url)
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
+                           f"{result.stderr.decode(errors='ignore')[:200]}")
+    return result.stdout
     if result.returncode != 0:
         raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
                             f"{result.stderr.decode(errors='ignore')[:200]}")
