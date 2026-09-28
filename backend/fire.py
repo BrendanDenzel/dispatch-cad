@@ -15,7 +15,7 @@ GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL   = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY   = os.environ.get("SUPABASE_KEY")
 STREAM_URL     = os.environ.get("STREAM_URL")   # fire/EMS .m3u8 playlist URL
-SEG_DURATION   = 4.032 # seconds per HLS segment, from the playlist's #EXTINF value
+SEG_DURATION   = 8.034 # seconds per HLS segment, from the playlist's #EXTINF value
 AUDIO_BUCKET   = "audio-clips"
 
 EASTERN     = ZoneInfo("America/New_York")
@@ -44,14 +44,28 @@ def ping():
 # this now runs as its own standalone service, separate from police.py.
 # ─────────────────────────────────────────────
 
+BROWSER_UA = ("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36")
+
 def curl_fetch(url: str) -> bytes:
-    result = subprocess.run(
-        ["curl", "-sS", "-f", "--max-time", "15",
-         "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-               "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-         url],
-        capture_output=True,
-    )
+    cmd = [
+        "curl", "-sS", "-f", "--max-time", "15",
+        "-A", BROWSER_UA,
+        "-H", "accept: */*",
+        "-H", "accept-language: en-US,en;q=0.9",
+        "-H", f"referer: {STREAM_URL}",
+        "-H", "sec-fetch-dest: video",
+        "-H", "sec-fetch-mode: cors",
+        "-H", "sec-fetch-site: same-origin",
+    ]
+    if url.split("?")[0].endswith(".ts"):
+        cmd += ["-H", "range: bytes=0-"]
+    cmd.append(url)
+    result = subprocess.run(cmd, capture_output=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
+                           f"{result.stderr.decode(errors='ignore')[:200]}")
+    return result.stdout
     if result.returncode != 0:
         raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
                             f"{result.stderr.decode(errors='ignore')[:200]}")
@@ -191,8 +205,8 @@ FIRE_LOG_TABLE       = "fire_radio_log"
 GEOCODE_CACHE_TABLE  = "geocode_cache"   # server-side cache of resolved map coordinates
 FIRE_SEG_SILENCE_DB      = -40.0  # ffmpeg mean_volume threshold; segments quieter than this = silence
 FIRE_PREROLL_SEGMENTS    = 1      # keep this many segments (~4s) buffered before a trigger, so we don't clip the start of a call
-FIRE_HANGOVER_SEGMENTS   = 3      # end capture after this many consecutive silent segments (~4s of quiet)
-FIRE_MAX_CLIP_SEGMENTS   = 15     # safety cap (~60s) in case a call/noise never goes quiet
+FIRE_HANGOVER_SEGMENTS   = 1      # end capture after this many consecutive silent segments (~4s of quiet)
+FIRE_MAX_CLIP_SEGMENTS   = 5     # safety cap (~60s) in case a call/noise never goes quiet
 FIRE_VAD_CHECK_EVERY_N   = 2      # only actually run ffmpeg volumedetect on every Nth
                                    # segment — cuts ffmpeg spawn rate roughly in half,
                                    # still detects speech onset within ~8s instead of ~4s
