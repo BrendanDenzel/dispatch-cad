@@ -49,7 +49,6 @@ def curl_fetch(url: str) -> bytes:
         ["curl", "-sS", "-f", "--max-time", "15",
          "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-         "-H", "Referer: https://www.broadcastify.com/",
          url],
         capture_output=True,
     )
