@@ -17,6 +17,7 @@ STREAM_URL     = os.environ.get("STREAM_URL")   # .m3u8 playlist URL
 CHUNK_SECONDS  = 120    # target seconds of actual audio per captured chunk
 SEG_DURATION   = 4.032 # seconds per HLS segment, from the playlist's #EXTINF value
 MAX_INCIDENTS  = 3000
+MAX_AUDIO_CLIPS = 1500   # max incidents that keep an audio file; oldest clips are removed, incident rows stay
 AUDIO_BUCKET   = "audio-clips"
 
 EASTERN     = ZoneInfo("America/New_York")
@@ -493,6 +494,40 @@ def purge_old_incidents():
     except Exception as e:
         print(f"Purge error: {e}", flush=True)
 
+def purge_old_audio():
+    """Keeps only the newest MAX_AUDIO_CLIPS audio files. Older clips are
+    deleted from storage and the incident's audio_url is set to NULL. The
+    incident row itself is NOT deleted. If we're already over the limit, this
+    trims all of the excess in one pass."""
+    try:
+        db    = get_db()
+        total = (db.table("incidents")
+                 .select("id", count="exact")
+                 .not_.is_("audio_url", "null")
+                 .execute()).count or 0
+        excess = total - MAX_AUDIO_CLIPS
+        if excess <= 0:
+            return
+
+        # Work in batches (Supabase caps rows per request). Rows we've already
+        # nulled drop out of the "audio_url not null" filter, so each loop
+        # naturally picks up the next-oldest clips.
+        while excess > 0:
+            batch = (db.table("incidents")
+                     .select("id, audio_url")
+                     .not_.is_("audio_url", "null")
+                     .order("created_at", desc=False)
+                     .limit(min(excess, 500))
+                     .execute()).data or []
+            if not batch:
+                break
+            for row in batch:
+                delete_audio(row["audio_url"])
+                db.table("incidents").update({"audio_url": None}).eq("id", row["id"]).execute()
+                print(f"Removed audio for incident id={row['id']} (kept incident)", flush=True)
+            excess -= len(batch)
+    except Exception as e:
+        print(f"Audio purge error: {e}", flush=True)
 
 def save_incident(parsed: dict, transcript: str, audio_url: str | None):
     try:
@@ -513,6 +548,7 @@ def save_incident(parsed: dict, transcript: str, audio_url: str | None):
             q.append(saved)
         print(f"Saved + broadcasted: {row['incident_type']}", flush=True)
         purge_old_incidents()
+        purge_old_audio()
     except Exception as e:
         print(f"Save error: {e}", flush=True)
 
