@@ -199,7 +199,7 @@ fire_clients = []
 
 FIRE_MAX_INCIDENTS = 5000
 FIRE_MAX_LOG_ROWS  = 5000
-FIRE_MAX_AUDIO_CLIPS = 2500   # max incidents that keep an audio file; oldest clips are removed, incident rows stay
+FIRE_MAX_AUDIO_CLIPS = 1500   # max incidents that keep an audio file; oldest clips are removed, incident rows stay
 FIRE_AUDIO_PREFIX  = "fire_clips"      # same AUDIO_BUCKET, separate folder from police "clips/"
 FIRE_INCIDENT_TABLE = "fire_incidents"
 FIRE_LOG_TABLE       = "fire_radio_log"
