@@ -10,6 +10,7 @@ from groq import Groq
 from supabase import create_client
 from collections import deque
 from admin_stats import admin_bp
+from mdc_detect import detect_mdc_bursts, build_speaker_lines
 
 GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL   = os.environ.get("SUPABASE_URL")
@@ -65,10 +66,6 @@ def curl_fetch(url: str) -> bytes:
     if result.returncode != 0:
         raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
                            f"{result.stderr.decode(errors='ignore')[:200]}")
-    return result.stdout
-    if result.returncode != 0:
-        raise RuntimeError(f"curl failed ({result.returncode}) for {url}: "
-                            f"{result.stderr.decode(errors='ignore')[:200]}")
     return result.stdout
 
 
@@ -205,12 +202,13 @@ FIRE_INCIDENT_TABLE = "fire_incidents"
 FIRE_LOG_TABLE       = "fire_radio_log"
 GEOCODE_CACHE_TABLE  = "geocode_cache"   # server-side cache of resolved map coordinates
 FIRE_SEG_SILENCE_DB      = -40.0  # ffmpeg mean_volume threshold; segments quieter than this = silence
-FIRE_PREROLL_SEGMENTS    = 1      # keep this many segments (~4s) buffered before a trigger, so we don't clip the start of a call
-FIRE_HANGOVER_SEGMENTS   = 1      # end capture after this many consecutive silent segments (~4s of quiet)
-FIRE_MAX_CLIP_SEGMENTS   = 5     # safety cap (~60s) in case a call/noise never goes quiet
+FIRE_PREROLL_SEGMENTS    = 1      # keep this many segments (~8s) buffered before a trigger, so we don't clip the start of a call
+FIRE_HANGOVER_SEGMENTS   = 1      # end capture after this many consecutive silent segments (~8s of quiet)
+FIRE_MAX_CLIP_SEGMENTS   = 5     # safety cap (~40s) in case a call/noise never goes quiet
 FIRE_VAD_CHECK_EVERY_N   = 2      # only actually run ffmpeg volumedetect on every Nth
                                    # segment — cuts ffmpeg spawn rate roughly in half,
-                                   # still detects speech onset within ~8s instead of ~4s
+                                   # at the cost of detecting speech onset up to ~8s later
+                                   # (within ~8-16s of the call starting instead of ~8s)
 
 
 # Repeated-transmission de-dupe: fire/EMS dispatch conventionally reads a
@@ -226,10 +224,10 @@ _fire_recent_calls_lock = threading.Lock()
 # in fire_process_audio_chunk (they're independent of each other and can
 # overlap: tone detection is CPU/subprocess-bound, transcription is
 # network/I/O-bound waiting on Groq).
-_fire_concurrency_pool = ThreadPoolExecutor(max_workers=2)
+_fire_concurrency_pool = ThreadPoolExecutor(max_workers=3)
 
 def fire_segment_mean_volume_db(seg_bytes: bytes) -> float:
-    """Returns the mean volume (dB) of a single ~4s TS segment via ffmpeg's
+    """Returns the mean volume (dB) of a single ~8s TS segment via ffmpeg's
     volumedetect filter. Used as the voice-activity trigger — cheap enough
     to run on every segment as it arrives."""
     if not seg_bytes:
@@ -400,7 +398,7 @@ def fire_fetch_playlist() -> list[str]:
 def fire_scanner_loop():
     """Voice-activated capture with pre-roll. Instead of grabbing a fixed
     60s window and hoping a call doesn't straddle the boundary, this watches
-    each ~4s segment as it rolls in and only starts accumulating a clip once
+    each ~8s segment as it rolls in and only starts accumulating a clip once
     it actually hears audio — seeded with a bit of pre-roll so the start of
     the call isn't clipped. It keeps capturing until a run of silent
     segments (hangover) says the call is over, then hands the whole clip
@@ -503,7 +501,8 @@ def fire_upload_audio(audio_bytes: bytes) -> str | None:
         return None
 
 
-def fire_transcribe(audio_bytes: bytes, _is_retry: bool = False) -> str:
+def fire_transcribe(audio_bytes: bytes, _is_retry: bool = False,
+                    seg_out: list | None = None, _offset: float = 0.0) -> str:
     tmp_path = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
@@ -520,11 +519,20 @@ def fire_transcribe(audio_bytes: bytes, _is_retry: bool = False) -> str:
         text = (result.text or "").strip()
         segments = result.segments or []
 
-        if not segments or _is_retry:
-            return text
-
         def seg_time(seg, key):
             return seg[key] if isinstance(seg, dict) else getattr(seg, key)
+
+        # Hand back clip-relative segment times (offset-corrected for head/tail retries)
+        if seg_out is not None:
+            for s in segments:
+                seg_out.append({
+                    "start": float(seg_time(s, "start")) + _offset,
+                    "end":   float(seg_time(s, "end")) + _offset,
+                    "text":  (seg_time(s, "text") or "").strip(),
+                })
+
+        if not segments or _is_retry:
+            return text
 
         first_start = seg_time(segments[0], "start")
         last_end    = seg_time(segments[-1], "end")
@@ -538,7 +546,7 @@ def fire_transcribe(audio_bytes: bytes, _is_retry: bool = False) -> str:
         if head_gap > 15.0:
             print(f"[fire] head skipped: transcript starts at {first_start:.1f}s, retrying head", flush=True)
             head_bytes = _extract_clip(tmp_path, 0, min(real_duration, first_start + 0.5))
-            head_text = fire_transcribe(head_bytes, _is_retry=True)
+            head_text = fire_transcribe(head_bytes, _is_retry=True, seg_out=seg_out, _offset=_offset)
             if head_text:
                 pieces.append(head_text)
 
@@ -547,7 +555,8 @@ def fire_transcribe(audio_bytes: bytes, _is_retry: bool = False) -> str:
         if tail_gap > 5.0:
             print(f"[fire] tail skipped: covered {last_end:.1f}s of {real_duration:.1f}s, retrying tail", flush=True)
             tail_bytes = _extract_clip(tmp_path, max(0, last_end - 0.5), real_duration)
-            tail_text = fire_transcribe(tail_bytes, _is_retry=True)
+            tail_text = fire_transcribe(tail_bytes, _is_retry=True, seg_out=seg_out,
+                                        _offset=_offset + max(0, last_end - 0.5))
             if tail_text:
                 pieces.append(tail_text)
 
@@ -723,7 +732,7 @@ def fire_purge_old_log_rows():
         print(f"[fire] Log purge error: {e}", flush=True)
 
 
-def fire_save_log_entry(transcript: str):
+def fire_save_log_entry(transcript: str, lines: list | None = None):
     """Append EVERYTHING that was said to the flat radio log — chatter,
     responding traffic, real calls, all of it — one row per audio chunk.
     Intentionally decoupled from incident detection."""
@@ -733,6 +742,8 @@ def fire_save_log_entry(transcript: str):
             "text":     transcript,
             "time_str": datetime.now(EASTERN).strftime("%I:%M %p"),
         }
+        if lines:
+            row["lines"] = lines
         res   = db.table(FIRE_LOG_TABLE).insert(row).execute()
         saved = res.data[0] if res.data else row
         fire_broadcast("log", saved)
@@ -741,7 +752,8 @@ def fire_save_log_entry(transcript: str):
         print(f"[fire] Log save error: {e}", flush=True)
 
 
-def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None, tone_dept: str | None = None):
+def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None,
+                       tone_dept: str | None = None, lines: list | None = None):
     try:
         db  = get_db()
         row = {
@@ -754,6 +766,8 @@ def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None, ton
             "audio_url":     audio_url,
             "tone_dept":     tone_dept,
         }
+        if lines:
+            row["lines"] = lines
         res   = db.table(FIRE_INCIDENT_TABLE).insert(row).execute()
         saved = res.data[0] if res.data else row
         fire_broadcast("incident", saved)
@@ -942,14 +956,22 @@ def fire_process_audio_chunk(audio: bytes):
 
         # Tone detection and transcription are independent of each other —
         # run them concurrently instead of sequentially to save time.
+        whisper_segments = []   # filled by fire_transcribe: [{"start","end","text"}]
         tone_future = _fire_concurrency_pool.submit(detect_two_tone_department, trimmed)
-        transcript_future = _fire_concurrency_pool.submit(fire_transcribe, trimmed)
+        mdc_future = _fire_concurrency_pool.submit(detect_mdc_bursts, trimmed)
+        transcript_future = _fire_concurrency_pool.submit(
+            lambda: fire_transcribe(trimmed, seg_out=whisper_segments))
 
         tone_dept = tone_future.result()
         if tone_dept:
             print(f"[fire] two-tone match: {tone_dept}", flush=True)
 
         transcript = transcript_future.result()
+        mdc_bursts = mdc_future.result()
+        lines = build_speaker_lines(whisper_segments, mdc_bursts)
+        if mdc_bursts:
+            print("[mdc] " + ", ".join(
+                f"{b['unit_id']:04X}@{b['t_end']:.1f}s" for b in mdc_bursts), flush=True)
         print(f"[fire] Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
 
         if len(transcript.strip()) < 10:
@@ -958,7 +980,7 @@ def fire_process_audio_chunk(audio: bytes):
 
         # Log EVERYTHING first, unconditionally — chatter, responding
         # traffic, real dispatch calls. Powers the flat radio log tab.
-        fire_save_log_entry(transcript)
+        fire_save_log_entry(transcript, lines)
 
         # Fresh-calls-only gate #1: is this just a repeat of a call that
         # was already read out in the last few minutes?
@@ -1007,7 +1029,7 @@ def fire_process_audio_chunk(audio: bytes):
         # address, keep the audio.
         print("[fire] Uploading audio for confirmed new incident...", flush=True)
         audio_url = fire_upload_audio(trimmed)
-        fire_save_incident(parsed, transcript, audio_url, tone_dept)
+        fire_save_incident(parsed, transcript, audio_url, tone_dept, lines)
 
     except Exception as e:
         import traceback
