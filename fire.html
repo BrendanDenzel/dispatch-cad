@@ -1107,7 +1107,7 @@ function removeRespondingLinesBeforeLocation(text, location) {
 }
 
 function getTranscriptDept(inc) {
-  const deptScanText = removeRespondingLinesBeforeLocation(inc.transcript, inc.location);
+  const deptScanText = removeRespondingLinesBeforeLocation(stripSpeakerLabels(inc.transcript), inc.location);
   return findDepartmentInText(deptScanText) || findDepartmentInText(inc.notes) || null;
 }
 
@@ -1846,21 +1846,50 @@ function renderRow(inc) {
   </div>`;
 }
 
+// ── Speaker labels (MDC IDs) embedded in saved transcript text ──────────
+// Saved format:  [[Name|id|t]] words|||[[Name|id|t]] words
+// Text with no markers (old rows, clips with no ID) is handled exactly as before.
+const SPEAKER_RE = /^\[\[([^|\]]*)\|([^|\]]*)(?:\|([^\]]*))?\]\]\s*/;
+
+// Plain text with all markers removed — for logic that must not see labels
+// (e.g. department detection).
+function stripSpeakerLabels(text) {
+  if (!text) return text;
+  return String(text).replace(/\[\[[^\]]*\]\]\s*/g, '').replace(/\s*\|\|\|\s*/g, ' ').trim();
+}
+
+// Saved text -> display lines [{speaker, unit_id, mdc_t, text}].
+// A new transmission (new MDC code) always starts a new line; inside a
+// transmission, lines still break on punctuation like before. The keyword
+// bank runs on the words only, never on the label.
+function parseTranscriptLines(raw) {
+  const out = [];
+  String(raw || '').split('|||').forEach(chunk => {
+    chunk = chunk.trim();
+    if (!chunk) return;
+    let speaker = null, unit_id = null, mdc_t = null;
+    const m = SPEAKER_RE.exec(chunk);
+    if (m) { speaker = m[1]; unit_id = m[2]; mdc_t = m[3]; chunk = chunk.slice(m[0].length); }
+    splitTranscript(formatText(chunk)).forEach(line => {
+      out.push({ speaker, unit_id, mdc_t, text: line });
+    });
+  });
+  return out;
+}
+
+function speakerTagHtml(l) {
+  if (!l.speaker) return '';
+  const tip = `MDC ${l.unit_id}` + (l.mdc_t ? ` · detected ${l.mdc_t}s into clip` : '');
+  return `<span class="tx-speaker" title="${escHtml(tip)}">${escHtml(l.speaker)}:</span> `;
+}
+
 function renderLogEntry(entry) {
-  // Speaker-labeled lines (from MDC IDs) when present, otherwise the old sentence splitting.
-  const lines = (Array.isArray(entry.lines) && entry.lines.length)
-    ? entry.lines.map(l => ({ speaker: l.speaker, unit_id: l.unit_id, mdc_t: l.mdc_t, text: formatText(l.text || '') }))
-    : splitTranscript(formatText(entry.text || '')).map(t => ({ speaker: null, text: t }));
+  const lines = parseTranscriptLines(entry.text);
   const tMs = entry.created_at ? new Date(entry.created_at).getTime() : '';
-  return lines.slice().reverse().map(l => {
-    const tag = l.speaker
-      ? `<span class="tx-speaker" title="MDC ${escHtml(String(l.unit_id||''))} · ${l.mdc_t != null ? l.mdc_t + 's into clip' : ''}">${escHtml(l.speaker)}:</span> `
-      : '';
-    return `<div class="tx-line-row" data-time-ms="${tMs}" data-entry-id="${escHtml(String(entry.id))}">
+  return lines.slice().reverse().map(l => `<div class="tx-line-row" data-time-ms="${tMs}" data-entry-id="${escHtml(String(entry.id))}">
       <span class="tx-line-time">${escHtml(entry.time_str||'')}</span>
-      <span class="tx-line-text">${tag}${escHtml(l.text)}</span>
-    </div>`;
-  }).join('');
+      <span class="tx-line-text">${speakerTagHtml(l)}${escHtml(l.text)}</span>
+    </div>`).join('');
 }
 
 function dateKeyET(ms) {
@@ -2065,16 +2094,6 @@ function openModal(id) {
        <div class="map-container" id="map-embed-container"></div>`
     : escHtml(loc);
 
-  const txLines = (Array.isArray(inc.lines) && inc.lines.length)
-    ? inc.lines.map(l => ({ speaker: l.speaker, unit_id: l.unit_id, mdc_t: l.mdc_t, text: formatText(l.text || '') }))
-    : splitTranscript(formatText(inc.transcript || 'No transcript available.')).map(t => ({ speaker: null, text: t }));
-  const txHtml = txLines.map(l => {
-    const tag = l.speaker
-      ? `<strong class="tx-speaker" title="MDC ${escHtml(String(l.unit_id||''))} · ${l.mdc_t != null ? l.mdc_t + 's into clip' : ''}">${escHtml(l.speaker)}:</strong> `
-      : '';
-    return `<span class="m-tx-line">${tag}${escHtml(l.text)}</span>`;
-  }).join('');
-
   document.getElementById('modal-title').textContent = inc.incident_type || 'Unknown Incident';
   document.getElementById('modal-sub').textContent   = `${incId} · ${inc.time_str||''} · ${loc}`;
   document.getElementById('modal-bar').className     = 'modal-hdr-bar ' + pc;
@@ -2098,7 +2117,7 @@ function openModal(id) {
     </div>
     <div class="m-section">
       <div class="m-section-title">Dispatch Transcript</div>
-      <div class="m-tx-box">${txHtml}</div>
+            <div class="m-tx-box">${parseTranscriptLines(inc.transcript||'No transcript available.').map(l=>`<span class="m-tx-line">${speakerTagHtml(l)}${escHtml(l.text)}</span>`).join('')}</div>
       <button class="goto-log-btn" onclick="goToRadioLog(${inc.id})">
         <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
         Go to radio log
