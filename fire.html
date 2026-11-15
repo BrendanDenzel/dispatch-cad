@@ -97,7 +97,8 @@ audio{display:none;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
 .tx-line-time{font-family:var(--mono);font-size:9px;color:var(--text3);flex-shrink:0;white-space:nowrap;}
 .tx-line-text{font-family:var(--mono);font-size:11.5px;color:var(--text2);line-height:1.5;}
-.tx-speaker{color:var(--blue-bright);font-weight:600;cursor:help;}
+.tx-speaker{color:var(--blue-bright);font-weight:600;cursor:default;}
+.speaker-tip{position:fixed;z-index:9999;display:none;max-width:240px;background:var(--panel3);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:10px;line-height:1.4;padding:5px 8px;border-radius:3px;box-shadow:0 2px 8px rgba(0,0,0,.5);pointer-events:none;}
 .bkdn{border-top:1px solid var(--border);padding:10px 12px;flex-shrink:0;}
 .bkdn-ttl{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
 .bkdn-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
@@ -486,6 +487,7 @@ audio{display:none;}
   <div class="side" id="view-side">
     <div class="col-hdr"><span class="col-hdr-title">Radio Log</span></div>
     <div class="bkdn"><div class="bkdn-ttl">Call Types</div><div id="breakdown-list"></div></div>
+    <div class="ptr-wrap" id="ptr-wrap-log"><div class="ptr-spinner" id="ptr-spinner-log"></div></div>
     <div class="tx-feed" id="transcript-feed"></div>
   </div>
 </div>
@@ -952,6 +954,18 @@ const KEYWORD_BANK = {
   "slonville": "Swormville",
   "Town Alana Creek Road": "Tonawanda Creek Road"
 };
+
+// MDC-1200 radio ID (uppercase hex, no 0x) -> department/unit name.
+const MDC_UNITS = {
+  "1A2B": "Engine 12",
+  "3C4D": "Medic 5",
+  "0001": "Amherst Fire Control",
+};
+
+function resolveSpeakerName(savedName, unitId) {
+  const key = String(unitId || '').trim().toUpperCase();
+  return MDC_UNITS[key] || (savedName && savedName.trim()) || (key ? `ID ${key}` : '');
+}
 
 function applyKeywordBank(text) {
   if (!text) return text;
@@ -1869,9 +1883,19 @@ function parseTranscriptLines(raw) {
     if (!chunk) return;
     let speaker = null, unit_id = null, mdc_t = null;
     const m = SPEAKER_RE.exec(chunk);
-    if (m) { speaker = m[1]; unit_id = m[2]; mdc_t = m[3]; chunk = chunk.slice(m[0].length); }
-    splitTranscript(formatText(chunk)).forEach(line => {
-      out.push({ speaker, unit_id, mdc_t, text: line });
+    if (m) {
+      unit_id = m[2];
+      mdc_t = m[3];
+      speaker = resolveSpeakerName(m[1], m[2]);
+      chunk = chunk.slice(m[0].length);
+    }
+    splitTranscript(formatText(chunk)).forEach((line, i) => {
+      out.push({
+        speaker: i === 0 ? speaker : null,
+        unit_id: i === 0 ? unit_id : null,
+        mdc_t:   i === 0 ? mdc_t   : null,
+        text: line
+      });
     });
   });
   return out;
@@ -1879,8 +1903,8 @@ function parseTranscriptLines(raw) {
 
 function speakerTagHtml(l) {
   if (!l.speaker) return '';
-  const tip = `MDC ${l.unit_id}` + (l.mdc_t ? ` · detected ${l.mdc_t}s into clip` : '');
-  return `<span class="tx-speaker" title="${escHtml(tip)}">${escHtml(l.speaker)}:</span> `;
+  const tip = `ID ${l.unit_id} (MDC-1200)`;
+  return `<span class="tx-speaker" data-tip="${escHtml(tip)}">${escHtml(l.speaker)}:</span> `;
 }
 
 function renderLogEntry(entry) {
@@ -2680,10 +2704,18 @@ async function fetchLog(offset = 0) {
   try {
     const res = await fetch(`${LOG_API}?offset=${offset}`);
     if (!res.ok) throw new Error();
-    const entries = await res.json();
+const entries = await res.json();
 
-    const tfeed = document.getElementById('transcript-feed');
-    const newOnes = entries.filter(e => !knownLogIds.has(String(e.id)));
+const tfeed = document.getElementById('transcript-feed');
+if (offset === 0) {
+  tfeed.innerHTML = '';
+  tfeed.scrollTop = 0;
+  knownLogIds = new Set();
+  logEntryMap = {};
+  logFeedNewestDateKey = null;
+  logFeedOldestDateKey = null;
+}
+const newOnes = entries.filter(e => !knownLogIds.has(String(e.id)));
     if (newOnes.length === 0 || entries.length === 0) { logAllLoaded = true; isLogLoading = false; return; }
 
         newOnes.forEach(e => { knownLogIds.add(String(e.id)); logEntryMap[String(e.id)] = e; });
@@ -2712,15 +2744,31 @@ document.getElementById('transcript-feed').addEventListener('scroll', function()
   }
 });
 
+// ── Shared refresh: pulling down on EITHER panel refreshes BOTH ─────────
+async function waitUntil(cond) {
+  while (!cond()) await new Promise(r => setTimeout(r, 50));
+}
+
+let refreshAllPromise = null;
+function refreshAll() {
+  if (refreshAllPromise) return refreshAllPromise; // ignore overlapping pulls
+  refreshAllPromise = (async () => {
+    // Let any in-flight page loads finish first, otherwise the fetches
+    // below would silently do nothing (they bail out while loading).
+    await waitUntil(() => !isLoading && !isLogLoading);
+    allLoaded = false;    currentOffset = 0;
+    logAllLoaded = false; logOffset = 0;
+    await Promise.all([fetchIncidents(0), fetchLog(0)]);
+  })().finally(() => { refreshAllPromise = null; });
+  return refreshAllPromise;
+}
+
 // ── Pull-to-refresh (mobile) — pulling down at the very top of the Active
 // Calls feed shows a spinner and reloads the incidents from offset 0. ──────
-(function initPullToRefresh() {
-  const feed    = document.getElementById('incident-feed');
-  const wrap    = document.getElementById('ptr-wrap');
-  const spinner = document.getElementById('ptr-spinner');
-  const THRESHOLD = 68;   // px of pull needed to trigger a refresh
-  const MAX_PULL  = 100;  // visual cap on how far the indicator can be dragged
-  const DAMPING   = 0.5;  // rubber-band feel — finger moves 2x the indicator
+function attachPullToRefresh(feed, wrap, spinner) {
+  const THRESHOLD = 68;
+  const MAX_PULL  = 100;
+  const DAMPING   = 0.5;
 
   let startY = 0, tracking = false, pullDist = 0, refreshing = false;
 
@@ -2733,7 +2781,6 @@ document.getElementById('transcript-feed').addEventListener('scroll', function()
 
   feed.addEventListener('touchmove', (e) => {
     if (!tracking || refreshing) return;
-    // Bail out if the feed has scrolled away from the top mid-gesture.
     if (feed.scrollTop > 0) { tracking = false; resetIndicator(); return; }
 
     const dy = e.touches[0].clientY - startY;
@@ -2743,18 +2790,15 @@ document.getElementById('transcript-feed').addEventListener('scroll', function()
     wrap.style.height = pullDist + 'px';
     spinner.style.opacity = Math.min(pullDist / THRESHOLD, 1);
     spinner.style.transform = `rotate(${pullDist * 3.5}deg)`;
-    e.preventDefault(); // stop the page from rubber-banding while we pull
+    e.preventDefault();
   }, { passive: false });
 
   feed.addEventListener('touchend', () => {
     if (!tracking || refreshing) { tracking = false; return; }
     tracking = false;
     wrap.classList.remove('no-transition');
-    if (pullDist >= THRESHOLD) {
-      triggerRefresh();
-    } else {
-      resetIndicator();
-    }
+    if (pullDist >= THRESHOLD) triggerRefresh();
+    else resetIndicator();
   });
 
   function resetIndicator() {
@@ -2772,10 +2816,7 @@ document.getElementById('transcript-feed').addEventListener('scroll', function()
     spinner.style.transform = '';
     spinner.classList.add('spin');
 
-    // Reload the Active Calls feed from the top.
-    allLoaded = false;
-    currentOffset = 0;
-    Promise.resolve(fetchIncidents(0)).finally(() => {
+    refreshAll().finally(() => {
       setTimeout(() => {
         spinner.classList.remove('spin');
         resetIndicator();
@@ -2784,6 +2825,50 @@ document.getElementById('transcript-feed').addEventListener('scroll', function()
       }, 350);
     });
   }
+}
+
+attachPullToRefresh(
+  document.getElementById('incident-feed'),
+  document.getElementById('ptr-wrap'),
+  document.getElementById('ptr-spinner')
+);
+attachPullToRefresh(
+  document.getElementById('transcript-feed'),
+  document.getElementById('ptr-wrap-log'),
+  document.getElementById('ptr-spinner-log')
+);
+
+// ── Speaker label tooltip (custom, instant, works on tap) ──────────────
+(function initSpeakerTip() {
+  const tipEl = document.createElement('div');
+  tipEl.className = 'speaker-tip';
+  document.body.appendChild(tipEl);
+
+  function show(target) {
+    tipEl.textContent = target.dataset.tip || '';
+    tipEl.style.display = 'block';
+    const r = target.getBoundingClientRect();
+    const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+    const left = Math.min(Math.max(8, r.left), window.innerWidth - tw - 8);
+    let top = r.top - th - 6;
+    if (top < 8) top = r.bottom + 6;
+    tipEl.style.left = left + 'px';
+    tipEl.style.top  = top + 'px';
+  }
+  function hide() { tipEl.style.display = 'none'; }
+
+  document.addEventListener('mouseover', e => {
+    const t = e.target.closest('.tx-speaker');
+    if (t) show(t);
+  });
+  document.addEventListener('mouseout', e => {
+    if (e.target.closest('.tx-speaker')) hide();
+  });
+  document.addEventListener('click', e => {
+    const t = e.target.closest('.tx-speaker');
+    if (t) show(t); else hide();
+  });
+  document.addEventListener('scroll', hide, true);
 })();
 
 fetchIncidents(0);
