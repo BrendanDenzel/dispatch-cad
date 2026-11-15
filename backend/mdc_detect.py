@@ -215,6 +215,22 @@ def build_speaker_lines(segments: list[dict], bursts: list[dict]) -> list[dict]:
     return lines
 
 
+def format_labeled_transcript(lines: list[dict]) -> str:
+    """Builds the text that gets saved: '[[name|id]] words|||[[name|id]] words'.
+    Returns '' when no line has a speaker (caller then saves the plain transcript)."""
+    if not any(l.get("speaker") for l in lines):
+        return ""
+    parts = []
+    for l in lines:
+        text = l["text"].replace("|||", " ").replace("[[", "(").replace("]]", ")")
+        if l.get("speaker"):
+            name = (l["speaker"].replace("|", "/").replace("[", "(").replace("]", ")"))
+            parts.append(f"[[{name}|{l['unit_id']}]] {text}")
+        else:
+            parts.append(text)
+    return "|||".join(parts)
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("usage: python mdc_detect.py clip.mp3|clip.wav")

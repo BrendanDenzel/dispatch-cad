@@ -10,7 +10,7 @@ from groq import Groq
 from supabase import create_client
 from collections import deque
 from admin_stats import admin_bp
-from mdc_detect import detect_mdc_bursts, build_speaker_lines
+from mdc_detect import detect_mdc_bursts, build_speaker_lines, format_labeled_transcript
 
 GROQ_API_KEY   = os.environ.get("GROQ_API_KEY")
 SUPABASE_URL   = os.environ.get("SUPABASE_URL")
@@ -732,7 +732,7 @@ def fire_purge_old_log_rows():
         print(f"[fire] Log purge error: {e}", flush=True)
 
 
-def fire_save_log_entry(transcript: str, lines: list | None = None):
+def fire_save_log_entry(transcript: str):
     """Append EVERYTHING that was said to the flat radio log — chatter,
     responding traffic, real calls, all of it — one row per audio chunk.
     Intentionally decoupled from incident detection."""
@@ -742,8 +742,6 @@ def fire_save_log_entry(transcript: str, lines: list | None = None):
             "text":     transcript,
             "time_str": datetime.now(EASTERN).strftime("%I:%M %p"),
         }
-        if lines:
-            row["lines"] = lines
         res   = db.table(FIRE_LOG_TABLE).insert(row).execute()
         saved = res.data[0] if res.data else row
         fire_broadcast("log", saved)
@@ -752,8 +750,7 @@ def fire_save_log_entry(transcript: str, lines: list | None = None):
         print(f"[fire] Log save error: {e}", flush=True)
 
 
-def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None,
-                       tone_dept: str | None = None, lines: list | None = None):
+def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None, tone_dept: str | None = None):
     try:
         db  = get_db()
         row = {
@@ -766,8 +763,6 @@ def fire_save_incident(parsed: dict, transcript: str, audio_url: str | None,
             "audio_url":     audio_url,
             "tone_dept":     tone_dept,
         }
-        if lines:
-            row["lines"] = lines
         res   = db.table(FIRE_INCIDENT_TABLE).insert(row).execute()
         saved = res.data[0] if res.data else row
         fire_broadcast("incident", saved)
@@ -968,11 +963,18 @@ def fire_process_audio_chunk(audio: bytes):
 
         transcript = transcript_future.result()
         mdc_bursts = mdc_future.result()
-        lines = build_speaker_lines(whisper_segments, mdc_bursts)
+        # `transcript` stays plain: the duplicate check, parser and length check use it.
+        # `stored_transcript` is what gets saved (labeled when an MDC ID was matched).
+        # Wrapped so a labeling bug can never stop a clip from being processed.
+        try:
+            lines = build_speaker_lines(whisper_segments, mdc_bursts)
+            stored_transcript = format_labeled_transcript(lines) or transcript
+        except Exception as e:
+            print(f"[mdc] labeling failed, saving plain transcript: {e}", flush=True)
+            stored_transcript = transcript
         if mdc_bursts:
             print("[mdc] " + ", ".join(
                 f"{b['unit_id']:04X}@{b['t_end']:.1f}s" for b in mdc_bursts), flush=True)
-        print(f"[fire] Transcript ({len(transcript)} chars): {transcript[:100]!r}", flush=True)
 
         if len(transcript.strip()) < 10:
             print("[fire] Too short, skipping entirely (not even logged).", flush=True)
@@ -980,7 +982,7 @@ def fire_process_audio_chunk(audio: bytes):
 
         # Log EVERYTHING first, unconditionally — chatter, responding
         # traffic, real dispatch calls. Powers the flat radio log tab.
-        fire_save_log_entry(transcript, lines)
+        fire_save_log_entry(stored_transcript)
 
         # Fresh-calls-only gate #1: is this just a repeat of a call that
         # was already read out in the last few minutes?
@@ -1029,7 +1031,7 @@ def fire_process_audio_chunk(audio: bytes):
         # address, keep the audio.
         print("[fire] Uploading audio for confirmed new incident...", flush=True)
         audio_url = fire_upload_audio(trimmed)
-        fire_save_incident(parsed, transcript, audio_url, tone_dept, lines)
+        fire_save_incident(parsed, stored_transcript, audio_url, tone_dept)
 
     except Exception as e:
         import traceback
