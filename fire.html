@@ -955,16 +955,23 @@ const KEYWORD_BANK = {
   "Town Alana Creek Road": "Tonawanda Creek Road"
 };
 
-// MDC-1200 radio ID (uppercase hex, no 0x) -> department/unit name.
-const MDC_UNITS = {
-  "1A2B": "Engine 12",
-  "3C4D": "Medic 5",
-  "0001": "Amherst Fire Control",
+// First 2 hex digits of the MDC-1200 ID -> department name.
+// The last 2 digits are shown after the name (5A33 -> "Ellicott Creek 33").
+const MDC_DEPTS = {
+  "5A": "Ellicott Creek",
+  "4A": "Eggertsville",
+  "8A": "Main Transit",
+  "7A": "Harris Hill",
+  "6B": "Williamsville"
 };
 
 function resolveSpeakerName(savedName, unitId) {
   const key = String(unitId || '').trim().toUpperCase();
-  return MDC_UNITS[key] || (savedName && savedName.trim()) || (key ? `ID ${key}` : '');
+  if (key.length === 4) {
+    const dept = MDC_DEPTS[key.slice(0, 2)];
+    if (dept) return `${dept} ${key.slice(2)}`;
+  }
+  return (savedName && savedName.trim()) || (key ? `ID ${key}` : '');
 }
 
 function applyKeywordBank(text) {
