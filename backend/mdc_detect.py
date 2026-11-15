@@ -23,17 +23,9 @@ DEDUP_SECONDS = 0.8     # ignore an identical burst repeated this quickly
 PTT_OP = 0x01
 TOL = 0.35              # seconds of slack when matching speech to a burst
 
-# ── Unit ID key: MDC ID (hex) -> name shown in the transcript. ───────────
-# Edit this. Unknown IDs show as "ID 1234". Values below are EXAMPLES.
-MDC_UNITS = {
-    0x1234: "Engine 4",
-    0x2345: "Ladder 12",
-    0x0001: "Amherst Fire Control",
-}
-
 
 def unit_label(unit_id: int) -> str:
-    return MDC_UNITS.get(unit_id, f"ID {unit_id:04X}")
+    return f"ID {unit_id:04X}"
 
 
 # ── Library loading (built once, thread-safe) ────────────────────────────
@@ -216,16 +208,16 @@ def build_speaker_lines(segments: list[dict], bursts: list[dict]) -> list[dict]:
 
 
 def format_labeled_transcript(lines: list[dict]) -> str:
-    """Builds the text that gets saved: '[[name|id]] words|||[[name|id]] words'.
-    Returns '' when no line has a speaker (caller then saves the plain transcript)."""
+    """Builds the saved text: '[[|id]] words|||[[|id]] words'.
+    The name field is left empty on purpose; the frontend looks it up from the ID.
+    Returns '' when no line has a speaker."""
     if not any(l.get("speaker") for l in lines):
         return ""
     parts = []
     for l in lines:
         text = l["text"].replace("|||", " ").replace("[[", "(").replace("]]", ")")
         if l.get("speaker"):
-            name = (l["speaker"].replace("|", "/").replace("[", "(").replace("]", ")"))
-            parts.append(f"[[{name}|{l['unit_id']}]] {text}")
+            parts.append(f"[[|{l['unit_id']}]] {text}")
         else:
             parts.append(text)
     return "|||".join(parts)
