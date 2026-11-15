@@ -97,6 +97,7 @@ audio{display:none;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}
 .tx-line-time{font-family:var(--mono);font-size:9px;color:var(--text3);flex-shrink:0;white-space:nowrap;}
 .tx-line-text{font-family:var(--mono);font-size:11.5px;color:var(--text2);line-height:1.5;}
+.tx-speaker{color:var(--blue-bright);font-weight:600;cursor:help;}
 .bkdn{border-top:1px solid var(--border);padding:10px 12px;flex-shrink:0;}
 .bkdn-ttl{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;}
 .bkdn-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
@@ -1846,12 +1847,20 @@ function renderRow(inc) {
 }
 
 function renderLogEntry(entry) {
-  const lines = splitTranscript(formatText(entry.text || ''));
+  // Speaker-labeled lines (from MDC IDs) when present, otherwise the old sentence splitting.
+  const lines = (Array.isArray(entry.lines) && entry.lines.length)
+    ? entry.lines.map(l => ({ speaker: l.speaker, unit_id: l.unit_id, mdc_t: l.mdc_t, text: formatText(l.text || '') }))
+    : splitTranscript(formatText(entry.text || '')).map(t => ({ speaker: null, text: t }));
   const tMs = entry.created_at ? new Date(entry.created_at).getTime() : '';
-  return lines.slice().reverse().map(l => `<div class="tx-line-row" data-time-ms="${tMs}" data-entry-id="${escHtml(String(entry.id))}">
+  return lines.slice().reverse().map(l => {
+    const tag = l.speaker
+      ? `<span class="tx-speaker" title="MDC ${escHtml(String(l.unit_id||''))} · ${l.mdc_t != null ? l.mdc_t + 's into clip' : ''}">${escHtml(l.speaker)}:</span> `
+      : '';
+    return `<div class="tx-line-row" data-time-ms="${tMs}" data-entry-id="${escHtml(String(entry.id))}">
       <span class="tx-line-time">${escHtml(entry.time_str||'')}</span>
-      <span class="tx-line-text">${escHtml(l)}</span>
-    </div>`).join('');
+      <span class="tx-line-text">${tag}${escHtml(l.text)}</span>
+    </div>`;
+  }).join('');
 }
 
 function dateKeyET(ms) {
@@ -2056,6 +2065,16 @@ function openModal(id) {
        <div class="map-container" id="map-embed-container"></div>`
     : escHtml(loc);
 
+  const txLines = (Array.isArray(inc.lines) && inc.lines.length)
+    ? inc.lines.map(l => ({ speaker: l.speaker, unit_id: l.unit_id, mdc_t: l.mdc_t, text: formatText(l.text || '') }))
+    : splitTranscript(formatText(inc.transcript || 'No transcript available.')).map(t => ({ speaker: null, text: t }));
+  const txHtml = txLines.map(l => {
+    const tag = l.speaker
+      ? `<strong class="tx-speaker" title="MDC ${escHtml(String(l.unit_id||''))} · ${l.mdc_t != null ? l.mdc_t + 's into clip' : ''}">${escHtml(l.speaker)}:</strong> `
+      : '';
+    return `<span class="m-tx-line">${tag}${escHtml(l.text)}</span>`;
+  }).join('');
+
   document.getElementById('modal-title').textContent = inc.incident_type || 'Unknown Incident';
   document.getElementById('modal-sub').textContent   = `${incId} · ${inc.time_str||''} · ${loc}`;
   document.getElementById('modal-bar').className     = 'modal-hdr-bar ' + pc;
@@ -2079,7 +2098,7 @@ function openModal(id) {
     </div>
     <div class="m-section">
       <div class="m-section-title">Dispatch Transcript</div>
-      <div class="m-tx-box">${splitTranscript(formatText(inc.transcript||'No transcript available.')).map(l=>`<span class="m-tx-line">${escHtml(l)}</span>`).join('')}</div>
+      <div class="m-tx-box">${txHtml}</div>
       <button class="goto-log-btn" onclick="goToRadioLog(${inc.id})">
         <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
         Go to radio log
