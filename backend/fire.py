@@ -50,7 +50,7 @@ BROWSER_UA = ("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 "
 
 def curl_fetch(url: str) -> bytes:
     cmd = [
-        "curl", "-sS", "-f", "--max-time", "15",
+        "curl", "-sS", "-f", "-L", "--max-time", "15",
         "-A", BROWSER_UA,
         "-H", "accept: */*",
         "-H", "accept-language: en-US,en;q=0.9",
